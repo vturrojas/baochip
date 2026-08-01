@@ -16,13 +16,10 @@ Status: In progress.
 
 ## Remaining Phase 0 gates
 
-- Expand prior-art review from orientation to specific mechanism-level comparisons.
-- Resolve whether revocation permits reprovisioning under a cryptographically unrelated identity.
-- Define authorization actors for provisioning, update, recovery, revocation, and decommission.
-- Define counter scopes and exhaustion policy at the semantic level.
-- Produce a requirement-to-test-plan mapping for the first model increment.
-- Record assumptions about endorsements, trust-anchor distribution, and reference-value ownership.
-- Review all normative words (`shall`, `must`, `prohibited`) for consistency.
+- Expand prior-art review from orientation to specific mechanism-level comparisons during the relevant Phase 1 design spikes.
+- Review all normative words (`shall`, `must`, `prohibited`) for consistency before publishing a versioned specification.
+
+The revocation/recommissioning rule, authority actors, counter scopes, requirement-to-test plan, and trust-input ownership are now defined.
 
 ## Explicitly deferred
 
@@ -37,4 +34,4 @@ Status: In progress.
 
 ## Go/no-go
 
-**Conditional go for Phase 1 scaffolding.** Repository structure and a Rust workspace may be created, but receipt serialization, real signing, and hardware interfaces remain blocked until their Phase 0 decisions are supported.
+**Go for Phase 1 Increment 1 scaffolding.** Repository structure and the dependency-free Rust lifecycle model may now be created. Receipt serialization, real signing, and hardware interfaces remain blocked until their separate design spikes produce supporting evidence.

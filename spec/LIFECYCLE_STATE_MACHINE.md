@@ -11,7 +11,7 @@ Status: Phase 0 behavioral specification. This document defines security-relevan
 | `OPERATIONAL` | The device may measure state and issue operational evidence under the active policy | permitted |
 | `UPDATE_PENDING` | An authenticated candidate update has been staged but not accepted | existing operational identity may report the pending state; candidate code may not issue operational evidence |
 | `RECOVERY` | Normal operation has failed or an authorized recovery transition has begun | prohibited except for explicitly typed recovery evidence |
-| `REVOKED` | The device identity or authority has been revoked | prohibited |
+| `REVOKED` | The current device identity or authority has been revoked | prohibited; the same identity can never return to operation |
 | `DECOMMISSIONED` | Protected identity and operational secrets have been irreversibly retired | permanently prohibited |
 | `FAULT` | An invariant, integrity check, persistence operation, or unsupported transition failed | prohibited except for a bounded fault report if safely available |
 
@@ -39,6 +39,7 @@ Status: Phase 0 behavioral specification. This document defines security-relevan
 | `OPERATIONAL` | enter recovery | authenticated recovery request or defined fault policy | `RECOVERY` | recovery cause and authority identifier |
 | `RECOVERY` | restore operation | recovery image and resulting identity/policy satisfy recovery rules | `OPERATIONAL` | recovery generation and any identity change |
 | any nonterminal state | revoke | revocation authority and policy validate | `REVOKED` | revocation reason and authority |
+| `REVOKED` | recommission | revoked secrets destroyed; generation advances; new unrelated identity; root, prospective owner, and physical/independent authority approve | `PROVISIONING` | recommission record bound to new generation |
 | `REVOKED` | decommission | decommission authorization and secret-erasure procedure complete | `DECOMMISSIONED` | non-secret destruction confirmation |
 | any nonterminal state | decommission | decommission authorization and secret-erasure procedure complete | `DECOMMISSIONED` | non-secret destruction confirmation |
 | any nonterminal state | invariant or persistence failure | fail-closed rule applies | `FAULT` | stable fault class if safely recordable |
@@ -64,8 +65,7 @@ The eventual command specification shall define an allowlist for every state. Co
 
 ## Unresolved design questions
 
-- Whether `REVOKED` should be terminal or permit reprovisioning with a cryptographically unrelated identity
-- Whether rollback state is one global generation or separately scoped counters
-- Which transitions require physical presence, quorum authorization, or manufacturer authority
 - What bounded evidence, if any, can safely be issued from `RECOVERY` or `FAULT`
 - How persistence atomicity will be modeled before hardware-specific storage is selected
+
+Recommissioning, authority roles, and counter scopes are defined in [Authority Model](AUTHORITY_MODEL.md) and [Counter Model](COUNTER_MODEL.md).

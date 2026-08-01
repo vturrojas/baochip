@@ -71,3 +71,27 @@ Decisions are provisional until their stated evidence and consequences are recor
 - **Status:** Open
 - **Leading candidate:** A defined EAT profile using CBOR/CWT and COSE, compared against a purpose-built deterministic CBOR baseline.
 - **Evidence needed:** canonical-encoding tests, malformed-input behavior, extension semantics, dependency audit, constrained-resource measurements, and independently generated vectors.
+
+## BC-0013 — Revocation is permanent for an identity
+
+- **Status:** Accepted
+- **Decision:** A revoked evidence identity can never return to operation. A physical device may be recommissioned only through a new provisioning ceremony, advanced device generation, destroyed old secrets, and a cryptographically unrelated identity.
+- **Reason:** This preserves revocation meaning while allowing controlled hardware reuse without pretending continuity of trust.
+
+## BC-0014 — Separate lifecycle authorities
+
+- **Status:** Accepted
+- **Decision:** Provisioning, ownership, update, recovery, revocation, decommission, endorsement, reference-value, and verifier-owner roles are semantically distinct. High-impact recovery and decommission transitions require physical presence or an independent second authority by default.
+- **Reason:** A universal administrator would collapse the lifecycle trust boundary and make recovery an undocumented bypass.
+
+## BC-0015 — Separately scoped monotonic values
+
+- **Status:** Accepted
+- **Decision:** Model device generation, lifecycle transition count, measurement epoch, and receipt sequence as distinct scopes. Wrap and silent reset are prohibited.
+- **Reason:** These values answer different freshness and rollback questions; one ambiguous counter cannot safely substitute for all of them.
+
+## BC-0016 — Verifier Owner controls trust inputs
+
+- **Status:** Accepted
+- **Decision:** The Verifier Owner selects trust anchors, accepted Endorsers, Reference Value Providers, and appraisal policy. Baochip does not require a project-operated verification or trust-anchor service.
+- **Reason:** Independent appraisal and explicit trust configuration are core research goals.
