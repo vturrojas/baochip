@@ -59,3 +59,15 @@ Decisions are provisional until their stated evidence and consequences are recor
 - **Status:** Accepted
 - **Decision:** Core receipt claims and verification layers are defined independently of CBOR, JSON, EAT, COSE, or any custom encoding.
 - **Reason:** Semantic agreement is required to compare encoding candidates without allowing a convenient library to dictate the security model.
+
+## BC-0011 — Rust for the executable model and reference verifier
+
+- **Status:** Accepted
+- **Decision:** Use stable Rust with the standard library for the first executable model and reference verifier. Do not require `no_std` until behavior and constrained-target requirements stabilize.
+- **Reason:** Rust provides explicit state modeling, memory safety, reproducible tooling, and a credible path toward constrained experiments without forcing hardware-specific design into Phase 1.
+
+## BC-0012 — Encoding family remains open
+
+- **Status:** Open
+- **Leading candidate:** A defined EAT profile using CBOR/CWT and COSE, compared against a purpose-built deterministic CBOR baseline.
+- **Evidence needed:** canonical-encoding tests, malformed-input behavior, extension semantics, dependency audit, constrained-resource measurements, and independently generated vectors.
