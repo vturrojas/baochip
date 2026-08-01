@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+message: "If you use Baochip research artifacts, please cite this repository."
+title: "Baochip"
+type: software
+authors:
+  - family-names: "Tur-Rojas"
+    given-names: "Vince"
+repository-code: "https://github.com/vturrojas/baochip"
+license: "Apache-2.0"
