@@ -35,6 +35,18 @@ sim/           future simulation harnesses and test vectors
 verifier/      future host-side receipt verifier
 ```
 
+## Executable model
+
+Phase 1 begins with a dependency-free Rust lifecycle model in [`crates/baochip-model`](crates/baochip-model). It models state transitions, authorization, protected counter scopes, update/recovery behavior, revocation/recommissioning, decommissioning, measurement epochs, and abstract receipt eligibility. It does not yet implement serialization, cryptography, persistence hardware, or RTL.
+
+Local validation:
+
+```text
+cargo fmt --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all-targets
+```
+
 ## Relationship to Surety
 
 [Surety](https://github.com/vturrojas/surety) studies evidence and assurance for software systems. Baochip is a possible hardware-backed evidence source within that broader research direction; it is not a prerequisite for Surety and does not validate Surety's claims.
