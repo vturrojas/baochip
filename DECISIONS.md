@@ -47,3 +47,15 @@ Decisions are provisional until their stated evidence and consequences are recor
 
 - **Status:** Accepted for current artifacts
 - **Decision:** Documentation and software are Apache-2.0. A future hardware-specific license may be evaluated before accepting material RTL contributions.
+
+## BC-0009 — Explicit lifecycle before command design
+
+- **Status:** Accepted
+- **Decision:** Baochip defines lifecycle states, invariants, and authorized transitions before defining device commands or host APIs.
+- **Reason:** Provisioning, reset, update, recovery, revocation, and decommission behavior determine the security boundary and cannot be safely bolted on later.
+
+## BC-0010 — Evidence semantics before wire format
+
+- **Status:** Accepted
+- **Decision:** Core receipt claims and verification layers are defined independently of CBOR, JSON, EAT, COSE, or any custom encoding.
+- **Reason:** Semantic agreement is required to compare encoding candidates without allowing a convenient library to dictate the security model.

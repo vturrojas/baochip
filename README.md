@@ -43,7 +43,7 @@ verifier/      future host-side receipt verifier
 
 Contributions should separate proposals, implementations, experiments, and results. Results must identify the exact artifact, configuration, threat model, and reproduction procedure used.
 
-Start with the [Project Charter](PROJECT_CHARTER.md), then review the [Research Program](docs/RESEARCH_PROGRAM.md), [Prior-Art Matrix](docs/PRIOR_ART_MATRIX.md), [Threat Model](docs/THREAT_MODEL.md), [Security Requirements](spec/SECURITY_REQUIREMENTS.md), [Architecture](docs/ARCHITECTURE.md), [Decision Log](DECISIONS.md), and [Roadmap](ROADMAP.md).
+Start with the [Project Charter](PROJECT_CHARTER.md), then review the [Research Program](docs/RESEARCH_PROGRAM.md), [Prior-Art Matrix](docs/PRIOR_ART_MATRIX.md), [Threat Model](docs/THREAT_MODEL.md), [Threat Traceability](docs/TRACEABILITY_MATRIX.md), [Security Requirements](spec/SECURITY_REQUIREMENTS.md), [Lifecycle State Machine](spec/LIFECYCLE_STATE_MACHINE.md), [Evidence Semantics](spec/EVIDENCE_SEMANTICS.md), [Architecture](docs/ARCHITECTURE.md), [Decision Log](DECISIONS.md), and [Roadmap](ROADMAP.md).
 
 ## License
 
