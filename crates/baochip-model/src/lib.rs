@@ -18,6 +18,21 @@ pub enum LifecycleState {
     Fault,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ProvisioningOrigin {
+    Initial,
+    Recommission,
+}
+
+impl ProvisioningOrigin {
+    const fn abort_state(self) -> LifecycleState {
+        match self {
+            Self::Initial => LifecycleState::Blank,
+            Self::Recommission => LifecycleState::Revoked,
+        }
+    }
+}
+
 /// Authorities and independent conditions supplied with a command.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Authorizations {
@@ -47,6 +62,41 @@ impl Authorizations {
     }
 }
 
+/// Abstract, test-controlled result of candidate update validation.
+///
+/// This records semantic validation outcomes only. It does not perform
+/// signature verification, compatibility analysis, or cryptography.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct UpdateValidation {
+    pub candidate_authenticated: bool,
+    pub compatible: bool,
+    pub integrity_valid: bool,
+}
+
+impl UpdateValidation {
+    #[must_use]
+    pub const fn passed() -> Self {
+        Self {
+            candidate_authenticated: true,
+            compatible: true,
+            integrity_valid: true,
+        }
+    }
+
+    const fn permits_activation(self) -> bool {
+        self.candidate_authenticated && self.compatible && self.integrity_valid
+    }
+}
+
+/// Canonical reason a staged update returns to the active image.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UpdateRejectionCause {
+    /// A trusted, test-controlled validation result rejected the candidate.
+    ValidationFailure(UpdateValidation),
+    /// Update and owner authorities explicitly cancelled the candidate.
+    AuthorizedCancellation(Authorizations),
+}
+
 /// Commands accepted by the first model increment.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Command {
@@ -56,12 +106,17 @@ pub enum Command {
     CommitProvisioning {
         authorizations: Authorizations,
     },
+    AbortProvisioning,
     StageUpdate {
         authorizations: Authorizations,
         candidate_version: u64,
     },
-    AcceptUpdate,
-    RejectUpdate,
+    AcceptUpdate {
+        validation: UpdateValidation,
+    },
+    RejectUpdate {
+        cause: UpdateRejectionCause,
+    },
     EnterRecovery {
         authorizations: Authorizations,
     },
@@ -121,6 +176,7 @@ pub struct AuditEvent {
     pub previous_state: LifecycleState,
     pub resulting_state: LifecycleState,
     pub device_generation: u64,
+    pub staged_device_generation: Option<u64>,
     pub transition_counter: u64,
 }
 
@@ -142,6 +198,7 @@ pub struct StateMachine {
     active_version: u64,
     pending_version: Option<u64>,
     provisioning_generation: Option<u64>,
+    provisioning_origin: Option<ProvisioningOrigin>,
     identity_active: bool,
 }
 
@@ -163,6 +220,7 @@ impl StateMachine {
             active_version: 0,
             pending_version: None,
             provisioning_generation: None,
+            provisioning_origin: None,
             identity_active: false,
         }
     }
@@ -219,6 +277,10 @@ impl StateMachine {
                 self.commit_provisioning(authorizations)?;
                 None
             }
+            Command::AbortProvisioning => {
+                self.abort_provisioning()?;
+                None
+            }
             Command::StageUpdate {
                 authorizations,
                 candidate_version,
@@ -226,12 +288,12 @@ impl StateMachine {
                 self.stage_update(authorizations, candidate_version)?;
                 None
             }
-            Command::AcceptUpdate => {
-                self.accept_update()?;
+            Command::AcceptUpdate { validation } => {
+                self.accept_update(validation)?;
                 None
             }
-            Command::RejectUpdate => {
-                self.reject_update()?;
+            Command::RejectUpdate { cause } => {
+                self.reject_update(cause)?;
                 None
             }
             Command::EnterRecovery { authorizations } => {
@@ -269,6 +331,7 @@ impl StateMachine {
                 previous_state,
                 resulting_state: self.lifecycle,
                 device_generation: self.device_generation,
+                staged_device_generation: self.provisioning_generation,
                 transition_counter: self.transition_counter,
             },
             receipt,
@@ -287,7 +350,9 @@ impl StateMachine {
             .device_generation
             .checked_add(1)
             .ok_or(Rejection::CounterExhausted)?;
+        self.advance_transition_counter()?;
         self.provisioning_generation = Some(next_generation);
+        self.provisioning_origin = Some(ProvisioningOrigin::Initial);
         self.lifecycle = LifecycleState::Provisioning;
         Ok(())
     }
@@ -300,10 +365,20 @@ impl StateMachine {
             return Err(Rejection::Unauthorized);
         }
 
-        let generation = self
-            .provisioning_generation
-            .take()
-            .ok_or(Rejection::InternalInvariantViolation)?;
+        let Some(generation) = self.provisioning_generation else {
+            self.enter_fault();
+            return Err(Rejection::InternalInvariantViolation);
+        };
+        if self.provisioning_origin.is_none() {
+            self.enter_fault();
+            return Err(Rejection::InternalInvariantViolation);
+        }
+        if generation <= self.device_generation {
+            self.enter_fault();
+            return Err(Rejection::InternalInvariantViolation);
+        }
+        self.provisioning_generation = None;
+        self.provisioning_origin = None;
         self.device_generation = generation;
         self.transition_counter = 1;
         self.measurement_epoch = 0;
@@ -312,6 +387,23 @@ impl StateMachine {
         self.pending_version = None;
         self.identity_active = true;
         self.lifecycle = LifecycleState::Operational;
+        Ok(())
+    }
+
+    fn abort_provisioning(&mut self) -> Result<(), Rejection> {
+        if self.lifecycle != LifecycleState::Provisioning {
+            return Err(Rejection::InvalidState);
+        }
+        let Some(origin) = self.provisioning_origin else {
+            self.enter_fault();
+            return Err(Rejection::InternalInvariantViolation);
+        };
+        self.advance_transition_counter()?;
+        self.pending_version = None;
+        self.provisioning_generation = None;
+        self.provisioning_origin = None;
+        self.identity_active = false;
+        self.lifecycle = origin.abort_state();
         Ok(())
     }
 
@@ -334,15 +426,19 @@ impl StateMachine {
         Ok(())
     }
 
-    fn accept_update(&mut self) -> Result<(), Rejection> {
+    fn accept_update(&mut self, validation: UpdateValidation) -> Result<(), Rejection> {
         if self.lifecycle != LifecycleState::UpdatePending {
             return Err(Rejection::InvalidState);
         }
-        let candidate = self
-            .pending_version
-            .ok_or(Rejection::InternalInvariantViolation)?;
+        let Some(candidate) = self.pending_version else {
+            self.enter_fault();
+            return Err(Rejection::InternalInvariantViolation);
+        };
         if candidate <= self.active_version {
             return Err(Rejection::RollbackDetected);
+        }
+        if !validation.permits_activation() {
+            return Err(Rejection::InvalidTransition);
         }
 
         self.advance_transition_counter()?;
@@ -352,9 +448,25 @@ impl StateMachine {
         Ok(())
     }
 
-    fn reject_update(&mut self) -> Result<(), Rejection> {
+    fn reject_update(&mut self, cause: UpdateRejectionCause) -> Result<(), Rejection> {
         if self.lifecycle != LifecycleState::UpdatePending {
             return Err(Rejection::InvalidState);
+        }
+        if self.pending_version.is_none() {
+            self.enter_fault();
+            return Err(Rejection::InternalInvariantViolation);
+        }
+        match cause {
+            UpdateRejectionCause::ValidationFailure(validation) => {
+                if validation.permits_activation() {
+                    return Err(Rejection::InvalidTransition);
+                }
+            }
+            UpdateRejectionCause::AuthorizedCancellation(auth) => {
+                if !auth.update || !auth.owner {
+                    return Err(Rejection::Unauthorized);
+                }
+            }
         }
         self.advance_transition_counter()?;
         self.pending_version = None;
@@ -396,14 +508,13 @@ impl StateMachine {
         if !auth.revocation {
             return Err(Rejection::Unauthorized);
         }
-        if matches!(
-            self.lifecycle,
-            LifecycleState::Blank | LifecycleState::Revoked
-        ) {
+        if self.lifecycle == LifecycleState::Revoked {
             return Err(Rejection::InvalidState);
         }
         self.advance_transition_counter()?;
         self.pending_version = None;
+        self.provisioning_generation = None;
+        self.provisioning_origin = None;
         self.identity_active = false;
         self.lifecycle = LifecycleState::Revoked;
         Ok(())
@@ -416,11 +527,16 @@ impl StateMachine {
         if !auth.root || !auth.owner || !(auth.physical_presence || auth.independent) {
             return Err(Rejection::Unauthorized);
         }
+        if self.device_generation == 0 {
+            return Err(Rejection::InvalidTransition);
+        }
         let next_generation = self
             .device_generation
             .checked_add(1)
             .ok_or(Rejection::CounterExhausted)?;
+        self.advance_transition_counter()?;
         self.provisioning_generation = Some(next_generation);
+        self.provisioning_origin = Some(ProvisioningOrigin::Recommission);
         self.pending_version = None;
         self.identity_active = false;
         self.lifecycle = LifecycleState::Provisioning;
@@ -431,8 +547,10 @@ impl StateMachine {
         if !auth.decommission || !(auth.physical_presence || auth.independent) {
             return Err(Rejection::Unauthorized);
         }
+        self.transition_counter = self.transition_counter.saturating_add(1);
         self.pending_version = None;
         self.provisioning_generation = None;
+        self.provisioning_origin = None;
         self.identity_active = false;
         self.lifecycle = LifecycleState::Decommissioned;
         Ok(())
@@ -440,22 +558,24 @@ impl StateMachine {
 
     fn start_measurement_epoch(&mut self) -> Result<(), Rejection> {
         self.require_operational()?;
-        self.measurement_epoch = self
-            .measurement_epoch
-            .checked_add(1)
-            .ok_or(Rejection::CounterExhausted)?;
+        let Some(next_epoch) = self.measurement_epoch.checked_add(1) else {
+            self.enter_fault();
+            return Err(Rejection::CounterExhausted);
+        };
+        self.measurement_epoch = next_epoch;
         Ok(())
     }
 
     fn issue_receipt(&mut self, challenge: Option<[u8; 16]>) -> Result<ReceiptClaims, Rejection> {
         self.require_operational()?;
         if !self.identity_active {
+            self.enter_fault();
             return Err(Rejection::IntegrityFailure);
         }
-        let next_sequence = self
-            .receipt_sequence
-            .checked_add(1)
-            .ok_or(Rejection::CounterExhausted)?;
+        let Some(next_sequence) = self.receipt_sequence.checked_add(1) else {
+            self.enter_fault();
+            return Err(Rejection::CounterExhausted);
+        };
         self.receipt_sequence = next_sequence;
 
         Ok(ReceiptClaims {
@@ -478,237 +598,30 @@ impl StateMachine {
     }
 
     fn advance_transition_counter(&mut self) -> Result<(), Rejection> {
-        self.transition_counter = self
-            .transition_counter
-            .checked_add(1)
-            .ok_or(Rejection::CounterExhausted)?;
+        let Some(next_counter) = self.transition_counter.checked_add(1) else {
+            self.enter_fault();
+            return Err(Rejection::CounterExhausted);
+        };
+        self.transition_counter = next_counter;
         Ok(())
+    }
+
+    fn enter_fault(&mut self) {
+        self.pending_version = None;
+        self.provisioning_generation = None;
+        self.provisioning_origin = None;
+        self.identity_active = false;
+        self.lifecycle = LifecycleState::Fault;
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
+mod adversarial_tests;
+#[cfg(test)]
+mod baseline_tests;
 
-    fn provisioning_start_auth() -> Authorizations {
-        Authorizations {
-            root: true,
-            physical_presence: true,
-            ..Authorizations::none()
-        }
-    }
+#[cfg(test)]
+mod invariant_tests;
 
-    fn provisioning_commit_auth() -> Authorizations {
-        Authorizations {
-            root: true,
-            owner: true,
-            ..Authorizations::none()
-        }
-    }
-
-    fn operational_machine() -> StateMachine {
-        let mut machine = StateMachine::new();
-        machine
-            .apply(Command::BeginProvisioning {
-                authorizations: provisioning_start_auth(),
-            })
-            .expect("authorized provisioning should begin");
-        machine
-            .apply(Command::CommitProvisioning {
-                authorizations: provisioning_commit_auth(),
-            })
-            .expect("authorized provisioning should commit");
-        machine
-    }
-
-    #[test]
-    fn initial_provisioning_creates_first_generation() {
-        let machine = operational_machine();
-        assert_eq!(machine.lifecycle(), LifecycleState::Operational);
-        assert_eq!(machine.device_generation(), 1);
-        assert_eq!(machine.transition_counter(), 1);
-        assert_eq!(machine.active_version(), 1);
-    }
-
-    #[test]
-    fn provisioning_requires_root_and_physical_presence() {
-        let mut machine = StateMachine::new();
-        let result = machine.apply(Command::BeginProvisioning {
-            authorizations: Authorizations {
-                root: true,
-                ..Authorizations::none()
-            },
-        });
-        assert_eq!(result, Err(Rejection::Unauthorized));
-        assert_eq!(machine.lifecycle(), LifecycleState::Blank);
-    }
-
-    #[test]
-    fn update_rejects_rollback_and_accepts_newer_version() {
-        let mut machine = operational_machine();
-        let auth = Authorizations {
-            owner: true,
-            update: true,
-            ..Authorizations::none()
-        };
-
-        assert_eq!(
-            machine.apply(Command::StageUpdate {
-                authorizations: auth,
-                candidate_version: 1,
-            }),
-            Err(Rejection::RollbackDetected)
-        );
-
-        machine
-            .apply(Command::StageUpdate {
-                authorizations: auth,
-                candidate_version: 2,
-            })
-            .expect("newer authorized update should stage");
-        machine
-            .apply(Command::AcceptUpdate)
-            .expect("staged update should commit");
-        assert_eq!(machine.active_version(), 2);
-        assert_eq!(machine.lifecycle(), LifecycleState::Operational);
-    }
-
-    #[test]
-    fn recovery_requires_recovery_authority_and_second_condition() {
-        let mut machine = operational_machine();
-        assert_eq!(
-            machine.apply(Command::EnterRecovery {
-                authorizations: Authorizations {
-                    recovery: true,
-                    ..Authorizations::none()
-                },
-            }),
-            Err(Rejection::Unauthorized)
-        );
-
-        machine
-            .apply(Command::EnterRecovery {
-                authorizations: Authorizations {
-                    recovery: true,
-                    independent: true,
-                    ..Authorizations::none()
-                },
-            })
-            .expect("independently authorized recovery should begin");
-        assert_eq!(machine.lifecycle(), LifecycleState::Recovery);
-    }
-
-    #[test]
-    fn revoked_identity_cannot_issue_and_recommission_advances_generation() {
-        let mut machine = operational_machine();
-        machine
-            .apply(Command::Revoke {
-                authorizations: Authorizations {
-                    revocation: true,
-                    ..Authorizations::none()
-                },
-            })
-            .expect("revocation authority should revoke");
-
-        assert_eq!(
-            machine.apply(Command::IssueReceipt { challenge: None }),
-            Err(Rejection::InvalidState)
-        );
-        assert_eq!(
-            machine.apply(Command::BeginProvisioning {
-                authorizations: provisioning_start_auth(),
-            }),
-            Err(Rejection::InvalidState)
-        );
-
-        machine
-            .apply(Command::BeginRecommission {
-                authorizations: Authorizations {
-                    root: true,
-                    owner: true,
-                    physical_presence: true,
-                    ..Authorizations::none()
-                },
-            })
-            .expect("authorized recommission should begin");
-        machine
-            .apply(Command::CommitProvisioning {
-                authorizations: provisioning_commit_auth(),
-            })
-            .expect("reprovisioning should commit a new identity generation");
-
-        assert_eq!(machine.device_generation(), 2);
-        assert_eq!(machine.lifecycle(), LifecycleState::Operational);
-        assert_eq!(machine.receipt_sequence(), 0);
-    }
-
-    #[test]
-    fn receipt_sequence_advances_and_binds_state() {
-        let mut machine = operational_machine();
-        machine
-            .apply(Command::StartMeasurementEpoch)
-            .expect("operational device should start an epoch");
-        let challenge = [0xA5; 16];
-        let execution = machine
-            .apply(Command::IssueReceipt {
-                challenge: Some(challenge),
-            })
-            .expect("operational device should issue a receipt");
-        let receipt = execution.receipt.expect("receipt command returns claims");
-
-        assert_eq!(receipt.device_generation, 1);
-        assert_eq!(receipt.measurement_epoch, 1);
-        assert_eq!(receipt.receipt_sequence, 1);
-        assert_eq!(receipt.challenge, Some(challenge));
-    }
-
-    #[test]
-    fn decommission_is_terminal() {
-        let mut machine = operational_machine();
-        machine
-            .apply(Command::Decommission {
-                authorizations: Authorizations {
-                    decommission: true,
-                    physical_presence: true,
-                    ..Authorizations::none()
-                },
-            })
-            .expect("authorized decommission should succeed");
-
-        assert_eq!(machine.lifecycle(), LifecycleState::Decommissioned);
-        assert_eq!(
-            machine.apply(Command::BeginProvisioning {
-                authorizations: provisioning_start_auth(),
-            }),
-            Err(Rejection::Decommissioned)
-        );
-    }
-
-    #[test]
-    fn undocumented_state_command_pairs_fail_closed() {
-        let mut machine = StateMachine::new();
-        assert_eq!(
-            machine.apply(Command::IssueReceipt { challenge: None }),
-            Err(Rejection::InvalidState)
-        );
-        assert_eq!(
-            machine.apply(Command::AcceptUpdate),
-            Err(Rejection::InvalidState)
-        );
-        assert_eq!(
-            machine.apply(Command::StartMeasurementEpoch),
-            Err(Rejection::InvalidState)
-        );
-    }
-
-    #[test]
-    fn receipt_counter_exhaustion_fails_closed() {
-        let mut machine = operational_machine();
-        machine.receipt_sequence = u64::MAX;
-        assert_eq!(
-            machine.apply(Command::IssueReceipt { challenge: None }),
-            Err(Rejection::CounterExhausted)
-        );
-        assert_eq!(machine.receipt_sequence(), u64::MAX);
-    }
-}
+#[cfg(test)]
+mod update_tests;
