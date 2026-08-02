@@ -4,7 +4,10 @@
 
 use baochip_model::{Command, Execution, LifecycleState, Rejection, StateMachine};
 
-/// Durable transaction phase.
+/// Abstract logical transaction phase.
+///
+/// These names describe selector authority in this executable model. They do
+/// not assert completion by any physical storage technology.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PersistencePhase {
     Clean,
@@ -51,13 +54,19 @@ pub struct PersistenceAudit {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PrepareResult {
     Staged {
-        outcome: CommandOutcome,
         audit: PersistenceAudit,
     },
     NotStaged {
         rejection: Rejection,
         audit: PersistenceAudit,
     },
+}
+
+/// Result released only after the abstract authoritative selector advances.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CommitResult {
+    pub outcome: CommandOutcome,
+    pub audit: PersistenceAudit,
 }
 
 /// Stable persistence-model failure classes.
@@ -68,6 +77,14 @@ pub enum PersistenceError {
     NoCommittedRecord,
     MissingActiveRecord,
     MissingCandidateRecord,
+    MissingPreviousRecord,
+    MissingPreparedOutcome,
+    UnexpectedPreparedOutcome,
+    UnexpectedRecord,
+    InvalidSlotIndex,
+    SlotConflict,
+    SelectorMismatch,
+    CommitIdMismatch,
     CommitIdExhausted,
     SuccessfulCommandWithoutDurableChange,
 }
@@ -84,6 +101,7 @@ pub struct DurableModel {
     slots: [Option<Record>; 2],
     active_slot: usize,
     phase: PersistencePhase,
+    prepared_outcome: Option<CommandOutcome>,
 }
 
 impl DurableModel {
@@ -99,6 +117,7 @@ impl DurableModel {
             ],
             active_slot: 0,
             phase: PersistencePhase::Clean,
+            prepared_outcome: None,
         }
     }
 
@@ -114,7 +133,10 @@ impl DurableModel {
     /// Returns [`PersistenceError::MissingActiveRecord`] if the selected slot
     /// has no complete record.
     pub fn active_state(&self) -> Result<&StateMachine, PersistenceError> {
-        Ok(&self.active_record()?.state)
+        self.validate_internal_state()?;
+        Ok(&self
+            .record_at(self.active_slot, PersistenceError::MissingActiveRecord)?
+            .state)
     }
 
     /// Return the currently authoritative logical commit identifier.
@@ -124,7 +146,10 @@ impl DurableModel {
     /// Returns [`PersistenceError::MissingActiveRecord`] if the selected slot
     /// has no complete record.
     pub fn active_commit_id(&self) -> Result<u64, PersistenceError> {
-        Ok(self.active_record()?.commit_id)
+        self.validate_internal_state()?;
+        Ok(self
+            .record_at(self.active_slot, PersistenceError::MissingActiveRecord)?
+            .commit_id)
     }
 
     /// Execute a command against a clone and prepare any resulting durable
@@ -136,11 +161,14 @@ impl DurableModel {
     /// missing, the commit identifier is exhausted, or a successful command
     /// unexpectedly produces no durable state change.
     pub fn prepare(&mut self, command: Command) -> Result<PrepareResult, PersistenceError> {
+        self.validate_internal_state()?;
         if self.phase != PersistencePhase::Clean {
             return Err(PersistenceError::Busy);
         }
 
-        let active = self.active_record()?.clone();
+        let active = self
+            .record_at(self.active_slot, PersistenceError::MissingActiveRecord)?
+            .clone();
         let prior_lifecycle = active.state.lifecycle();
         let mut candidate = active.state.clone();
         let command_result = candidate.apply(command);
@@ -166,21 +194,21 @@ impl DurableModel {
             .checked_add(1)
             .ok_or(PersistenceError::CommitIdExhausted)?;
         let candidate_slot = self.inactive_slot();
+        let outcome = match command_result {
+            Ok(execution) => CommandOutcome::Applied(execution),
+            Err(rejection) => CommandOutcome::Rejected(rejection),
+        };
         self.slots[candidate_slot] = Some(Record {
             commit_id,
             state: candidate,
         });
+        self.prepared_outcome = Some(outcome);
         self.phase = PersistencePhase::Prepared {
             slot: candidate_slot,
             commit_id,
         };
 
-        let outcome = match command_result {
-            Ok(execution) => CommandOutcome::Applied(execution),
-            Err(rejection) => CommandOutcome::Rejected(rejection),
-        };
         Ok(PrepareResult::Staged {
-            outcome,
             audit: PersistenceAudit {
                 operation: PersistenceOperation::Prepared,
                 prior_lifecycle,
@@ -195,29 +223,39 @@ impl DurableModel {
     /// # Errors
     ///
     /// Returns an error unless a complete prepared record exists.
-    pub fn commit(&mut self) -> Result<PersistenceAudit, PersistenceError> {
+    pub fn commit(&mut self) -> Result<CommitResult, PersistenceError> {
+        self.validate_internal_state()?;
         let PersistencePhase::Prepared { slot, commit_id } = self.phase else {
             return Err(PersistenceError::NoPreparedRecord);
         };
-        let previous = self.active_record()?.state.lifecycle();
-        let next = self.slots[slot]
-            .as_ref()
-            .ok_or(PersistenceError::MissingCandidateRecord)?
+        let previous = self
+            .record_at(self.active_slot, PersistenceError::MissingActiveRecord)?
             .state
             .lifecycle();
+        let next = self
+            .record_at(slot, PersistenceError::MissingCandidateRecord)?
+            .state
+            .lifecycle();
+        let outcome = self
+            .prepared_outcome
+            .ok_or(PersistenceError::MissingPreparedOutcome)?;
         let previous_slot = self.active_slot;
         self.active_slot = slot;
+        self.prepared_outcome = None;
         self.phase = PersistencePhase::Committed {
             previous_slot,
             active_slot: slot,
             commit_id,
         };
 
-        Ok(PersistenceAudit {
-            operation: PersistenceOperation::SelectorCommitted,
-            prior_lifecycle: previous,
-            resulting_lifecycle: next,
-            commit_id,
+        Ok(CommitResult {
+            outcome,
+            audit: PersistenceAudit {
+                operation: PersistenceOperation::SelectorCommitted,
+                prior_lifecycle: previous,
+                resulting_lifecycle: next,
+                commit_id,
+            },
         })
     }
 
@@ -227,6 +265,7 @@ impl DurableModel {
     ///
     /// Returns an error unless selector commit has completed.
     pub fn cleanup(&mut self) -> Result<PersistenceAudit, PersistenceError> {
+        self.validate_internal_state()?;
         let PersistencePhase::Committed {
             previous_slot,
             commit_id,
@@ -235,13 +274,20 @@ impl DurableModel {
         else {
             return Err(PersistenceError::NoCommittedRecord);
         };
-        let lifecycle = self.active_record()?.state.lifecycle();
+        let previous_lifecycle = self
+            .record_at(previous_slot, PersistenceError::MissingPreviousRecord)?
+            .state
+            .lifecycle();
+        let lifecycle = self
+            .record_at(self.active_slot, PersistenceError::MissingActiveRecord)?
+            .state
+            .lifecycle();
         self.slots[previous_slot] = None;
         self.phase = PersistencePhase::Clean;
 
         Ok(PersistenceAudit {
             operation: PersistenceOperation::PreviousRecordCleaned,
-            prior_lifecycle: lifecycle,
+            prior_lifecycle: previous_lifecycle,
             resulting_lifecycle: lifecycle,
             commit_id,
         })
@@ -253,10 +299,12 @@ impl DurableModel {
     ///
     /// Returns an error if the selector identifies no complete active record.
     pub fn crash_and_recover(&mut self) -> Result<PersistenceAudit, PersistenceError> {
+        self.validate_internal_state()?;
         let phase = self.phase;
         match phase {
             PersistencePhase::Clean => {
-                let record = self.active_record()?;
+                let record =
+                    self.record_at(self.active_slot, PersistenceError::MissingActiveRecord)?;
                 Ok(PersistenceAudit {
                     operation: PersistenceOperation::RecoveredStable,
                     prior_lifecycle: record.state.lifecycle(),
@@ -265,19 +313,22 @@ impl DurableModel {
                 })
             }
             PersistencePhase::Prepared { slot, .. } => {
-                let candidate_lifecycle = self.slots[slot]
-                    .as_ref()
-                    .ok_or(PersistenceError::MissingCandidateRecord)?
+                let candidate_lifecycle = self
+                    .record_at(slot, PersistenceError::MissingCandidateRecord)?
                     .state
                     .lifecycle();
+                let active =
+                    self.record_at(self.active_slot, PersistenceError::MissingActiveRecord)?;
+                let active_lifecycle = active.state.lifecycle();
+                let active_commit_id = active.commit_id;
                 self.slots[slot] = None;
+                self.prepared_outcome = None;
                 self.phase = PersistencePhase::Clean;
-                let active = self.active_record()?;
                 Ok(PersistenceAudit {
                     operation: PersistenceOperation::RecoveredPrevious,
                     prior_lifecycle: candidate_lifecycle,
-                    resulting_lifecycle: active.state.lifecycle(),
-                    commit_id: active.commit_id,
+                    resulting_lifecycle: active_lifecycle,
+                    commit_id: active_commit_id,
                 })
             }
             PersistencePhase::Committed {
@@ -285,34 +336,110 @@ impl DurableModel {
                 commit_id,
                 ..
             } => {
-                let previous_lifecycle = self.slots[previous_slot]
-                    .as_ref()
-                    .ok_or(PersistenceError::MissingActiveRecord)?
+                let previous_lifecycle = self
+                    .record_at(previous_slot, PersistenceError::MissingPreviousRecord)?
+                    .state
+                    .lifecycle();
+                let active_lifecycle = self
+                    .record_at(self.active_slot, PersistenceError::MissingActiveRecord)?
                     .state
                     .lifecycle();
                 self.slots[previous_slot] = None;
                 self.phase = PersistencePhase::Clean;
-                let active = self.active_record()?;
                 Ok(PersistenceAudit {
                     operation: PersistenceOperation::RecoveredNext,
                     prior_lifecycle: previous_lifecycle,
-                    resulting_lifecycle: active.state.lifecycle(),
+                    resulting_lifecycle: active_lifecycle,
                     commit_id,
                 })
             }
         }
     }
 
-    fn active_record(&self) -> Result<&Record, PersistenceError> {
-        self.slots[self.active_slot]
-            .as_ref()
-            .ok_or(PersistenceError::MissingActiveRecord)
+    fn validate_internal_state(&self) -> Result<(), PersistenceError> {
+        self.validate_slot_index(self.active_slot)?;
+        let active = self.record_at(self.active_slot, PersistenceError::MissingActiveRecord)?;
+
+        match self.phase {
+            PersistencePhase::Clean => {
+                if self.prepared_outcome.is_some() {
+                    return Err(PersistenceError::UnexpectedPreparedOutcome);
+                }
+                if self.slots[self.inactive_slot()].is_some() {
+                    return Err(PersistenceError::UnexpectedRecord);
+                }
+            }
+            PersistencePhase::Prepared { slot, commit_id } => {
+                self.validate_slot_index(slot)?;
+                if slot == self.active_slot {
+                    return Err(PersistenceError::SlotConflict);
+                }
+                let candidate = self.record_at(slot, PersistenceError::MissingCandidateRecord)?;
+                if self.prepared_outcome.is_none() {
+                    return Err(PersistenceError::MissingPreparedOutcome);
+                }
+                let expected_commit_id = active
+                    .commit_id
+                    .checked_add(1)
+                    .ok_or(PersistenceError::CommitIdMismatch)?;
+                if commit_id != candidate.commit_id || commit_id != expected_commit_id {
+                    return Err(PersistenceError::CommitIdMismatch);
+                }
+            }
+            PersistencePhase::Committed {
+                previous_slot,
+                active_slot,
+                commit_id,
+            } => {
+                self.validate_slot_index(previous_slot)?;
+                self.validate_slot_index(active_slot)?;
+                if active_slot != self.active_slot {
+                    return Err(PersistenceError::SelectorMismatch);
+                }
+                if previous_slot == active_slot {
+                    return Err(PersistenceError::SlotConflict);
+                }
+                if self.prepared_outcome.is_some() {
+                    return Err(PersistenceError::UnexpectedPreparedOutcome);
+                }
+                let previous =
+                    self.record_at(previous_slot, PersistenceError::MissingPreviousRecord)?;
+                let expected_commit_id = previous
+                    .commit_id
+                    .checked_add(1)
+                    .ok_or(PersistenceError::CommitIdMismatch)?;
+                if commit_id != active.commit_id || commit_id != expected_commit_id {
+                    return Err(PersistenceError::CommitIdMismatch);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn record_at(
+        &self,
+        slot: usize,
+        missing: PersistenceError,
+    ) -> Result<&Record, PersistenceError> {
+        self.validate_slot_index(slot)?;
+        self.slots[slot].as_ref().ok_or(missing)
+    }
+
+    const fn validate_slot_index(&self, slot: usize) -> Result<(), PersistenceError> {
+        if slot < self.slots.len() {
+            Ok(())
+        } else {
+            Err(PersistenceError::InvalidSlotIndex)
+        }
     }
 
     const fn inactive_slot(&self) -> usize {
         1 - self.active_slot
     }
 }
+
+#[cfg(test)]
+mod adversarial_tests;
 
 #[cfg(test)]
 mod tests {

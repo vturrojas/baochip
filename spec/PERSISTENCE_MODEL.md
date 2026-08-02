@@ -44,6 +44,26 @@ A crash in this phase recovers the next state selected as authoritative.
 
 The obsolete previous record has been erased or made reusable. The model returns to `Clean`.
 
+## Complete internal invariant
+
+Before any persistence operation reads, selects, or clears a record, the model
+validates the complete phase/selector/record relationship:
+
+- every referenced slot index is in range;
+- the authoritative selector identifies a complete record;
+- `Clean` has no untracked candidate record or pending command outcome;
+- `Prepared` identifies a complete inactive record distinct from the active
+  slot, binds its pending command outcome, and agrees with that record's
+  `commit_id`;
+- `Committed` agrees with the actual selector, identifies a distinct complete
+  previous record, and agrees with the selected record's `commit_id`; and
+- every candidate or selected next identifier is exactly the checked successor
+  of the previous authoritative identifier.
+
+Invariant errors are stable and leave the complete model unchanged. Recovery
+validates every record it will use before clearing either slot, so a malformed
+phase cannot erase the only recoverable record.
+
 ## Rejected commands
 
 - A rejection that leaves lifecycle state unchanged creates no candidate record.
@@ -57,6 +77,19 @@ The obsolete previous record has been erased or made reusable. The model returns
 - A crash before selector commit may consume no externally authoritative identifier.
 - A crash after selector commit makes the next identifier authoritative.
 - Commit identifiers order complete persistent snapshots; they do not replace device generation, transition count, measurement epoch, or receipt sequence.
+
+## Outcome release
+
+Preparation may execute a command against a candidate clone, but it does not
+release the command outcome or any receipt claims to the caller. The outcome is
+released only by the abstract selector-commit operation that makes the complete
+candidate authoritative. This prevents callers from treating a prepared record
+as durable and prevents a prepare/crash/retry sequence from releasing duplicate
+receipt sequences.
+
+`Prepared`, `Committed`, and the persistence audit operation names describe
+logical authority inside this executable model only. They do not assert that a
+flash, EEPROM, filesystem, fuse, or other physical medium completed a write.
 
 ## Interruption audit
 
@@ -90,5 +123,8 @@ These are explicit later increments. The two-slot model first establishes transa
 - fault-producing rejected commands can be durably committed;
 - commit identifiers advance without reuse or wrap;
 - persistence operations reject invalid phase ordering;
+- malformed phase, selector, record, and commit-identifier relationships return
+  stable errors without panicking or partially mutating the model;
+- command outcomes are withheld until selector commit;
 - the crate has no third-party runtime dependencies; and
 - formatting, Clippy with denied warnings, tests, and `git diff --check` pass.
