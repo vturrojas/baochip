@@ -8,7 +8,7 @@ Status: Phase 0 plan for the first Rust model increment.
 - **Transition-table tests:** every lifecycle state crossed with every command category.
 - **Property tests:** generated command sequences preserve invariants and never reuse protected counter scopes.
 - **Interruption tests:** reset or persistent-write failure at every injection point.
-- **Vector tests:** stable abstract receipt claims and later encoded positive/negative fixtures.
+- **Vector tests:** validated candidate-neutral semantic objects in `baochip-semantic-fixtures`, stable abstract receipt claims, and later candidate-specific encoded positive/negative vectors.
 - **Model exploration:** bounded enumeration of short command sequences from every reachable state.
 
 ## Requirement-to-test mapping

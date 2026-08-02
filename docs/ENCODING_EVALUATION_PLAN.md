@@ -52,6 +52,8 @@ No candidate receives a numeric score until its evidence artifact exists.
 Each candidate prototype must use the same frozen semantic fixtures and
 produce:
 
+- an adapter from the versioned `baochip-semantic-fixtures` corpus, with any
+  unsupported semantic value reported rather than silently omitted;
 - canonical encodings for boundary values and every optional-field state;
 - decode and re-encode stability results;
 - explicit rejection codes for malformed inputs;
@@ -95,6 +97,10 @@ An encoding may be selected only when:
 - independent review finds no unsupported cryptographic or hardware claim.
 
 If no candidate passes, Baochip keeps the encoding decision open.
+
+The Rust fixture crate is an input oracle for comparison only. Passing its
+semantic validators does not satisfy parser, canonicalization, differential,
+cryptographic, interoperability, or constrained-cost evidence requirements.
 
 ## Explicit non-results
 

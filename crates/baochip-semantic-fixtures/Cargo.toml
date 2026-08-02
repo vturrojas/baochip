@@ -1,0 +1,12 @@
+[package]
+name = "baochip-semantic-fixtures"
+version = "0.1.0"
+description = "Candidate-neutral semantic fixtures for Baochip encoding research"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true

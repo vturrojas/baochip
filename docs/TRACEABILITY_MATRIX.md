@@ -23,7 +23,7 @@ Status: Phase 0 working matrix. “Planned evidence” identifies how a future c
 
 | Threat | Primary requirements | Planned evidence |
 |---|---|---|
-| `BCT-001` | `BCR-EVI-001`–`004`, `BCR-VER-002`, `BCR-VER-004` | canonical semantic projection, canonical-encoding vectors, mutation corpus, parser differential tests, cross-object/device/generation/profile/version/suite/extension substitution vectors |
+| `BCT-001` | `BCR-EVI-001`–`004`, `BCR-VER-002`, `BCR-VER-004` | executable semantic fixture corpus, canonical semantic projection, canonical-encoding vectors, mutation corpus, parser differential tests, cross-object/device/generation/profile/version/suite/extension substitution vectors |
 | `BCT-002` | `BCR-ID-001`–`003`, `BCR-LIF-001`–`004` | interface noninterference tests, key-lifecycle model, implementation review |
 | `BCT-003` | `BCR-FRE-001`, `002`, `004`, `BCR-EVI-002` | nonce replay vectors, verifier state tests, cross-context substitution tests |
 | `BCT-004` | `BCR-FRE-002`–`004`, `BCR-LIF-002`–`004` | protected state/authority projection, adversarial state transitions, stale-image tests, counter persistence model |
@@ -32,7 +32,7 @@ Status: Phase 0 working matrix. “Planned evidence” identifies how a future c
 | `BCT-007` | `BCR-FRE-003`, `BCR-LIF-001`, `002`, `BCR-ASR-001` | protected authority-metadata projection including prepared outcomes and record presence, independent selector/phase appraisal design, exhaustive interruption points, atomicity model, typed record/selector corruption injection, reset fuzzing |
 | `BCT-008` | `BCR-EVI-005`, `BCR-MEA-003`, `005`, `BCR-VER-002` | verifier-layer tests, documentation review, prohibited-inference cases |
 | `BCT-009` | `BCR-ID-002`, `004` | linkability analysis, pseudonymous-profile comparison, privacy review |
-| `BCT-010` | `BCR-EVI-003`, `004`, `BCR-VER-003`, `004` | canonical type rules, malformed corpus, version downgrade tests, critical-extension tests, differential decoders |
+| `BCT-010` | `BCR-EVI-003`, `004`, `BCR-VER-003`, `004` | semantic fixture validation, canonical type rules, malformed corpus, version downgrade tests, critical-extension tests, differential decoders |
 | `BCT-011` | `BCR-VER-001` | offline reproduction test and published trust-anchor inputs |
 | `BCT-012` | `BCR-ASR-001`–`004` | claim-to-evidence ledger, reproducibility records, external review |
 

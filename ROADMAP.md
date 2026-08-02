@@ -15,6 +15,7 @@ Exit criterion: reviewers can identify exactly what Baochip would and would not 
 
 - Specify device identity, measurement, counter, receipt, and verification formats
 - Define the canonical semantic record projection before selecting canonical bytes
+- Publish a candidate-neutral executable semantic fixture corpus
 - Compare encoding candidates using shared positive and adversarial vectors
 - Define provisioning, update, recovery, revocation, and decommissioning flows
 - Publish test vectors and negative cases

@@ -216,6 +216,14 @@ that this future audit schema or its protection has been implemented.
 8. Integrity verification occurs over the selected canonical protected input,
    not over a parser's lossy in-memory reconstruction.
 
+## Executable fixture corpus
+
+The initial executable representation of these semantic values is maintained
+in `crates/baochip-semantic-fixtures` and specified by
+[Semantic Fixture Model](SEMANTIC_FIXTURE_MODEL.md). Its Rust types and example
+identifiers are fixture-authoring scaffolding, not selected protocol types,
+numeric assignments, or canonical bytes.
+
 ## Change control
 
 Any change to the protected projection requires:

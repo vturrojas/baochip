@@ -12,3 +12,7 @@ version = "0.1.0"
 dependencies = [
  "baochip-model",
 ]
+
+[[package]]
+name = "baochip-semantic-fixtures"
+version = "0.1.0"

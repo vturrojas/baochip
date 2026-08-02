@@ -125,3 +125,9 @@ Decisions are provisional until their stated evidence and consequences are recor
 - **Status:** Accepted decision rule; encoding remains open
 - **Decision:** Do not select EAT/CBOR/COSE or a custom deterministic format until at least two candidates encode the same frozen semantic fixtures, publish negative vectors, undergo differential decoding, and report measured constrained costs.
 - **Reason:** Standards alignment, small output, or library availability alone cannot establish canonicality, rejection safety, independent implementability, or suitability.
+
+## BC-0022 — Shared fixtures are semantic objects, not protocol bytes
+
+- **Status:** Accepted for encoding evaluation
+- **Decision:** Candidate encoders begin from one dependency-free Rust corpus of validated semantic objects. Fixture identifiers, Rust enum layout, allocation choices, and example profile or suite strings are evaluation scaffolding and are not protocol assignments. Each candidate remains responsible for producing and publishing its own bytes and rejection vectors from equivalent semantic values.
+- **Reason:** A shared executable input prevents each encoding prototype from quietly choosing easier semantics while avoiding premature selection of an authoring serialization or canonical byte representation.
