@@ -39,6 +39,8 @@ verifier/      future host-side receipt verifier
 
 Phase 1 begins with a dependency-free Rust lifecycle model in [`crates/baochip-model`](crates/baochip-model). It models state transitions, authorization, protected counter scopes, update/recovery behavior, revocation/recommissioning, decommissioning, measurement epochs, and abstract receipt eligibility. It does not yet implement serialization, cryptography, persistence hardware, or RTL.
 
+Atomic state-change experiments are isolated in [`crates/baochip-persistence-model`](crates/baochip-persistence-model), which models complete-record preparation, selector commit, cleanup, and interruption recovery. See the [Persistence Model](spec/PERSISTENCE_MODEL.md). It is an abstract transaction model, not a durability claim about any storage technology.
+
 Local validation:
 
 ```text

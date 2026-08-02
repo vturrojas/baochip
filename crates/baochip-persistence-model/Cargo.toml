@@ -1,0 +1,15 @@
+[package]
+name = "baochip-persistence-model"
+version = "0.1.0"
+description = "Atomic persistence and interruption model for Baochip research"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+baochip-model = { path = "../baochip-model" }
+
+[lints]
+workspace = true
