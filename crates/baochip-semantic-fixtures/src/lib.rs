@@ -63,6 +63,13 @@ pub struct SubjectScope {
     pub key_generation: Option<u64>,
 }
 
+/// Required receipt lineage mode. This is semantic context, not a key format.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ReceiptLineageContext {
+    KeyGeneration(u64),
+    ProvisioningGeneration(u64),
+}
+
 /// Context common to every protected semantic object.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProtectedContext {
@@ -172,7 +179,9 @@ pub enum AuthorityPhaseProjection {
 pub struct AuthorityMetadataProjection {
     pub context: ProtectedContext,
     pub raw_selected_slot: u8,
-    pub records_present: [bool; 2],
+    /// Commit identifier for each present logical record. `None` denotes an
+    /// empty slot, so presence and record identity cannot contradict.
+    pub record_commit_ids: [Option<u64>; 2],
     pub phase: AuthorityPhaseProjection,
 }
 
@@ -181,6 +190,10 @@ pub struct AuthorityMetadataProjection {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ExecutionReceiptProjection {
     pub context: ProtectedContext,
+    /// Commit identifier of the authoritative persistent snapshot whose
+    /// selector commit released this receipt.
+    pub authority_commit_id: u64,
+    pub lineage: ReceiptLineageContext,
     pub key_identifier: Vec<u8>,
     pub lifecycle_state: LifecycleState,
     pub device_generation: u64,
@@ -227,6 +240,10 @@ pub enum ValidationError {
     SelectorMismatch,
     DuplicateExtension,
     UnorderedExtensions,
+    CommitIdMismatch,
+    AuthorityPhaseMismatch,
+    AuthorityContextMismatch,
+    StateContextMismatch,
     InconsistentState,
     InconsistentExecution,
 }
@@ -268,6 +285,14 @@ impl PersistentStateProjection {
             return Err(ValidationError::InconsistentState);
         }
 
+        let identity_must_be_active = matches!(
+            self.lifecycle_state,
+            LifecycleState::Operational | LifecycleState::UpdatePending | LifecycleState::Recovery
+        );
+        if self.identity_active != identity_must_be_active {
+            return Err(ValidationError::InconsistentState);
+        }
+
         let provisioning = self.lifecycle_state == LifecycleState::Provisioning;
         let has_provisioning_generation = self.provisioning_generation.is_some();
         let has_provisioning_origin = self.provisioning_origin.is_some();
@@ -277,9 +302,18 @@ impl PersistentStateProjection {
             return Err(ValidationError::InconsistentState);
         }
         if let Some(generation) = self.provisioning_generation {
-            if generation <= self.device_generation {
+            if self.device_generation.checked_add(1) != Some(generation) {
                 return Err(ValidationError::InconsistentState);
             }
+        }
+        match self.provisioning_origin {
+            Some(ProvisioningOrigin::Initial) if self.device_generation != 0 => {
+                return Err(ValidationError::InconsistentState);
+            }
+            Some(ProvisioningOrigin::Recommission) if self.device_generation == 0 => {
+                return Err(ValidationError::InconsistentState);
+            }
+            _ => {}
         }
         let update_pending = self.lifecycle_state == LifecycleState::UpdatePending;
         if update_pending != self.pending_version.is_some() {
@@ -297,9 +331,16 @@ impl PersistentStateProjection {
 impl ExecutionProjection {
     fn validate(&self) -> Result<(), ValidationError> {
         if let Some(receipt) = &self.receipt {
-            if receipt.lifecycle_state != self.audit.resulting_state
+            if self.audit.previous_state != LifecycleState::Operational
+                || self.audit.resulting_state != LifecycleState::Operational
+                || self.audit.staged_device_generation.is_some()
+                || receipt.lifecycle_state != self.audit.resulting_state
                 || receipt.device_generation != self.audit.device_generation
                 || receipt.transition_counter != self.audit.transition_counter
+                || receipt.device_generation == 0
+                || receipt.transition_counter == 0
+                || receipt.receipt_sequence == 0
+                || receipt.active_version == 0
             {
                 return Err(ValidationError::InconsistentExecution);
             }
@@ -328,33 +369,36 @@ impl AuthorityMetadataProjection {
 
         match &self.phase {
             AuthorityPhaseProjection::Clean => {
-                if !self.records_present[usize::from(self.raw_selected_slot)] {
+                if self.record_commit_ids[usize::from(self.raw_selected_slot)].is_none() {
                     return Err(ValidationError::MissingRecord);
                 }
-                if self.records_present[usize::from(other_slot(self.raw_selected_slot))] {
+                if self.record_commit_ids[usize::from(other_slot(self.raw_selected_slot))].is_some()
+                {
                     return Err(ValidationError::UnexpectedRecord);
                 }
             }
             AuthorityPhaseProjection::Prepared {
                 candidate_slot,
+                commit_id,
                 prepared_outcome,
-                ..
             } => {
                 validate_slot(*candidate_slot)?;
                 if *candidate_slot == self.raw_selected_slot {
                     return Err(ValidationError::SlotConflict);
                 }
-                if !self.records_present[usize::from(self.raw_selected_slot)]
-                    || !self.records_present[usize::from(*candidate_slot)]
+                let previous_commit_id = self.record_commit_id(self.raw_selected_slot)?;
+                let candidate_commit_id = self.record_commit_id(*candidate_slot)?;
+                if previous_commit_id.checked_add(1) != Some(*commit_id)
+                    || candidate_commit_id != *commit_id
                 {
-                    return Err(ValidationError::MissingRecord);
+                    return Err(ValidationError::CommitIdMismatch);
                 }
                 prepared_outcome.validate()?;
             }
             AuthorityPhaseProjection::Committed {
                 previous_slot,
                 selected_next_slot,
-                ..
+                commit_id,
             } => {
                 validate_slot(*previous_slot)?;
                 validate_slot(*selected_next_slot)?;
@@ -364,14 +408,20 @@ impl AuthorityMetadataProjection {
                 if *selected_next_slot != self.raw_selected_slot {
                     return Err(ValidationError::SelectorMismatch);
                 }
-                if !self.records_present[usize::from(*previous_slot)]
-                    || !self.records_present[usize::from(*selected_next_slot)]
+                let previous_commit_id = self.record_commit_id(*previous_slot)?;
+                let selected_commit_id = self.record_commit_id(*selected_next_slot)?;
+                if previous_commit_id.checked_add(1) != Some(*commit_id)
+                    || selected_commit_id != *commit_id
                 {
-                    return Err(ValidationError::MissingRecord);
+                    return Err(ValidationError::CommitIdMismatch);
                 }
             }
         }
         Ok(())
+    }
+
+    fn record_commit_id(&self, slot: u8) -> Result<u64, ValidationError> {
+        self.record_commit_ids[usize::from(slot)].ok_or(ValidationError::MissingRecord)
     }
 }
 
@@ -385,6 +435,20 @@ impl ExecutionReceiptProjection {
         if self.context.subject.device_generation != self.device_generation {
             return Err(ValidationError::InconsistentState);
         }
+        match self.lineage {
+            ReceiptLineageContext::KeyGeneration(generation)
+                if self.context.subject.key_generation != Some(generation) =>
+            {
+                return Err(ValidationError::InconsistentState);
+            }
+            ReceiptLineageContext::ProvisioningGeneration(generation)
+                if self.context.subject.key_generation.is_some()
+                    || generation != self.device_generation =>
+            {
+                return Err(ValidationError::InconsistentState);
+            }
+            _ => {}
+        }
         if self.key_identifier.is_empty()
             || self.measurement_root.is_empty()
             || self.measurement_context.is_empty()
@@ -396,6 +460,77 @@ impl ExecutionReceiptProjection {
             || self.output_commitment.as_ref().is_some_and(Vec::is_empty)
         {
             return Err(ValidationError::EmptyRequiredValue);
+        }
+        Ok(())
+    }
+
+    /// Validate that selector commit in a matching authority object released
+    /// this receipt.
+    pub fn validate_release_authority(
+        &self,
+        authority: &AuthorityMetadataProjection,
+    ) -> Result<(), ValidationError> {
+        self.validate()?;
+        authority.validate()?;
+        let AuthorityPhaseProjection::Committed {
+            selected_next_slot,
+            commit_id,
+            ..
+        } = authority.phase
+        else {
+            return Err(ValidationError::AuthorityPhaseMismatch);
+        };
+        let selected_commit_id = authority.record_commit_id(selected_next_slot)?;
+        if authority.context.subject != self.context.subject
+            || commit_id != self.authority_commit_id
+            || selected_commit_id != self.authority_commit_id
+        {
+            return Err(ValidationError::AuthorityContextMismatch);
+        }
+        Ok(())
+    }
+
+    /// Validate every receipt claim represented in the authoritative
+    /// persistent snapshot that released it.
+    pub fn validate_authoritative_state(
+        &self,
+        state: &PersistentStateProjection,
+    ) -> Result<(), ValidationError> {
+        self.validate()?;
+        state.validate()?;
+        if state.context.subject != self.context.subject
+            || state.commit_id != self.authority_commit_id
+            || state.lifecycle_state != self.lifecycle_state
+            || state.device_generation != self.device_generation
+            || state.transition_counter != self.transition_counter
+            || state.measurement_epoch != self.measurement_epoch
+            || state.active_version != self.active_version
+            || self
+                .receipt_sequence
+                .is_some_and(|sequence| sequence != state.receipt_sequence)
+        {
+            return Err(ValidationError::StateContextMismatch);
+        }
+        Ok(())
+    }
+
+    /// Validate the complete semantic release relationship among receipt,
+    /// committed authority metadata, and selected persistent state.
+    pub fn validate_release(
+        &self,
+        authority: &AuthorityMetadataProjection,
+        state: &PersistentStateProjection,
+    ) -> Result<(), ValidationError> {
+        self.validate_release_authority(authority)?;
+        self.validate_authoritative_state(state)?;
+        let AuthorityPhaseProjection::Committed {
+            selected_next_slot, ..
+        } = authority.phase
+        else {
+            return Err(ValidationError::AuthorityPhaseMismatch);
+        };
+        if selected_next_slot != state.slot_id {
+            return Err(ValidationError::StateContextMismatch);
         }
         Ok(())
     }
@@ -614,6 +749,25 @@ pub fn positive_fixtures() -> Vec<Fixture> {
             }),
         },
         Fixture {
+            identifier: "persistent-operational-receipt-release",
+            purpose: "authoritative snapshot matching the positive receipt release",
+            object: SemanticObject::PersistentState(PersistentStateProjection {
+                context: context(ObjectClass::PersistentState, 1, None),
+                slot_id: 1,
+                commit_id: 4,
+                lifecycle_state: LifecycleState::Operational,
+                device_generation: 1,
+                transition_counter: 3,
+                measurement_epoch: 3,
+                receipt_sequence: 1,
+                active_version: 4,
+                pending_version: None,
+                provisioning_generation: None,
+                provisioning_origin: None,
+                identity_active: true,
+            }),
+        },
+        Fixture {
             identifier: "persistent-revoked",
             purpose: "revoked lifecycle with inactive identity",
             object: SemanticObject::PersistentState(PersistentStateProjection {
@@ -653,7 +807,7 @@ pub fn positive_fixtures() -> Vec<Fixture> {
         },
         Fixture {
             identifier: "persistent-fault",
-            purpose: "fault lifecycle preserves exact remaining state",
+            purpose: "fault lifecycle disables identity eligibility",
             object: SemanticObject::PersistentState(PersistentStateProjection {
                 context: context(ObjectClass::PersistentState, 1, Some(1)),
                 slot_id: 1,
@@ -667,7 +821,7 @@ pub fn positive_fixtures() -> Vec<Fixture> {
                 pending_version: None,
                 provisioning_generation: None,
                 provisioning_origin: None,
-                identity_active: true,
+                identity_active: false,
             }),
         },
         Fixture {
@@ -676,7 +830,7 @@ pub fn positive_fixtures() -> Vec<Fixture> {
             object: SemanticObject::AuthorityMetadata(AuthorityMetadataProjection {
                 context: context(ObjectClass::AuthorityMetadata, 1, Some(1)),
                 raw_selected_slot: 0,
-                records_present: [true, false],
+                record_commit_ids: [Some(1), None],
                 phase: AuthorityPhaseProjection::Clean,
             }),
         },
@@ -686,7 +840,7 @@ pub fn positive_fixtures() -> Vec<Fixture> {
             object: SemanticObject::AuthorityMetadata(AuthorityMetadataProjection {
                 context: context(ObjectClass::AuthorityMetadata, 1, Some(1)),
                 raw_selected_slot: 0,
-                records_present: [true, true],
+                record_commit_ids: [Some(1), Some(2)],
                 phase: AuthorityPhaseProjection::Prepared {
                     candidate_slot: 1,
                     commit_id: 2,
@@ -703,7 +857,7 @@ pub fn positive_fixtures() -> Vec<Fixture> {
             object: SemanticObject::AuthorityMetadata(AuthorityMetadataProjection {
                 context: context(ObjectClass::AuthorityMetadata, 1, Some(1)),
                 raw_selected_slot: 1,
-                records_present: [true, true],
+                record_commit_ids: [Some(3), Some(2)],
                 phase: AuthorityPhaseProjection::Prepared {
                     candidate_slot: 0,
                     commit_id: 3,
@@ -717,9 +871,9 @@ pub fn positive_fixtures() -> Vec<Fixture> {
             identifier: "authority-committed",
             purpose: "selected next record with retained previous record",
             object: SemanticObject::AuthorityMetadata(AuthorityMetadataProjection {
-                context: context(ObjectClass::AuthorityMetadata, 1, Some(1)),
+                context: context(ObjectClass::AuthorityMetadata, 1, None),
                 raw_selected_slot: 1,
-                records_present: [true, true],
+                record_commit_ids: [Some(3), Some(4)],
                 phase: AuthorityPhaseProjection::Committed {
                     previous_slot: 0,
                     selected_next_slot: 1,
@@ -731,11 +885,13 @@ pub fn positive_fixtures() -> Vec<Fixture> {
             identifier: "receipt-minimal-optionals-absent",
             purpose: "complete required future receipt with optionals absent",
             object: SemanticObject::ExecutionReceipt(ExecutionReceiptProjection {
-                context: context(ObjectClass::ExecutionReceipt, 1, Some(1)),
+                context: context(ObjectClass::ExecutionReceipt, 1, None),
+                authority_commit_id: 4,
+                lineage: ReceiptLineageContext::ProvisioningGeneration(1),
                 key_identifier: vec![0x01],
                 lifecycle_state: LifecycleState::Operational,
                 device_generation: 1,
-                transition_counter: 2,
+                transition_counter: 3,
                 measurement_epoch: 3,
                 receipt_sequence: None,
                 active_version: 4,
@@ -752,10 +908,12 @@ pub fn positive_fixtures() -> Vec<Fixture> {
             identifier: "receipt-optionals-present",
             purpose: "present zero and byte-valued optionals remain distinct",
             object: SemanticObject::ExecutionReceipt(ExecutionReceiptProjection {
-                context: context(ObjectClass::ExecutionReceipt, 0, Some(0)),
+                context: context(ObjectClass::ExecutionReceipt, 1, Some(0)),
+                authority_commit_id: 1,
+                lineage: ReceiptLineageContext::KeyGeneration(0),
                 key_identifier: vec![0x00],
                 lifecycle_state: LifecycleState::Operational,
-                device_generation: 0,
+                device_generation: 1,
                 transition_counter: 0,
                 measurement_epoch: 0,
                 receipt_sequence: Some(0),
@@ -772,6 +930,8 @@ pub fn positive_fixtures() -> Vec<Fixture> {
     ]
 }
 
+#[cfg(test)]
+mod adversarial_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -883,7 +1043,7 @@ mod tests {
         let SemanticObject::AuthorityMetadata(authority) = &mut fixture.object else {
             panic!("expected authority fixture");
         };
-        authority.records_present = [true, true];
+        authority.record_commit_ids = [Some(1), Some(2)];
         assert_eq!(authority.validate(), Err(ValidationError::UnexpectedRecord));
     }
 
@@ -956,13 +1116,5 @@ mod tests {
         };
         receipt.input_commitment = Some(Vec::new());
         assert_eq!(receipt.validate(), Err(ValidationError::EmptyRequiredValue));
-    }
-
-    #[test]
-    fn text_and_bytes_extension_values_are_distinct() {
-        assert_ne!(
-            ExtensionValue::Text(String::from("00")),
-            ExtensionValue::Bytes(vec![0x00])
-        );
     }
 }

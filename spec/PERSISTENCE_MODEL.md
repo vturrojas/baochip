@@ -33,8 +33,9 @@ The fields a future encoding and integrity layer must bind are enumerated in
 [Canonical Record Model](CANONICAL_RECORD_MODEL.md). The executable persistence
 model does not yet produce that byte representation.
 
-The authority-metadata projection also includes record presence, phase slot
-relationships, phase commit identifiers, and the pending command outcome.
+The authority-metadata projection also includes per-slot record commit
+identifiers (whose absence denotes an empty slot), phase slot relationships,
+phase commit identifiers, and the pending command outcome.
 Selector and phase metadata require independently appraisable protection before
 selector-corruption recovery can be implemented without circular trust.
 

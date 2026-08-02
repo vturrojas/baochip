@@ -129,5 +129,5 @@ Decisions are provisional until their stated evidence and consequences are recor
 ## BC-0022 — Shared fixtures are semantic objects, not protocol bytes
 
 - **Status:** Accepted for encoding evaluation
-- **Decision:** Candidate encoders begin from one dependency-free Rust corpus of validated semantic objects. Fixture identifiers, Rust enum layout, allocation choices, and example profile or suite strings are evaluation scaffolding and are not protocol assignments. Each candidate remains responsible for producing and publishing its own bytes and rejection vectors from equivalent semantic values.
+- **Decision:** Candidate encoders begin from one dependency-free Rust corpus of validated semantic objects and explicit semantic cross-object bindings. Fixture identifiers, Rust enum layout, allocation choices, commit identifiers, and example profile or suite strings are evaluation scaffolding and are not protocol or cryptographic assignments. Each candidate remains responsible for producing and publishing its own bytes and rejection vectors from equivalent semantic values.
 - **Reason:** A shared executable input prevents each encoding prototype from quietly choosing easier semantics while avoiding premature selection of an authoring serialization or canonical byte representation.

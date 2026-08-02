@@ -1,6 +1,7 @@
 # Phase 1 Increment 5 Exit Review
 
-Status: Proposed executable-fixture tranche exit record.
+Status: Independent adversarial review and final local validation complete;
+merge pending.
 
 ## Scope
 
@@ -10,6 +11,8 @@ Status: Proposed executable-fixture tranche exit record.
 - Publish positive fixtures for lifecycle, boundary, optionality, authority,
   extension, and receipt distinctions.
 - Validate semantic invariants without producing bytes.
+- Bind authority phase commit identifiers to per-slot record identifiers and
+  receipt release to matching committed authority context.
 - Connect the corpus to the canonical model, evaluation plan, decisions,
   traceability, roadmap, and test plan.
 
@@ -22,6 +25,8 @@ Status: Proposed executable-fixture tranche exit record.
   optionals.
 - Invalid fixture objects in the implemented validation classes fail with
   stable semantic errors.
+- Receipt release and record/phase identifier consistency can be checked at
+  the semantic layer without implying authentication.
 
 ## Unsupported claims
 
@@ -33,22 +38,26 @@ Status: Proposed executable-fixture tranche exit record.
   durability, RTL, FPGA, or hardware result exists.
 - The corpus is not yet automatically derived from the executable lifecycle
   or persistence models.
+- Logical commit identifiers are not hashes, signatures, storage addresses, or
+  physical-durability evidence.
 
 ## Exit checklist
 
-- [ ] Every positive fixture passes semantic validation.
-- [ ] Fixture identifiers are unique and every current lifecycle-state identity
+- [x] Every positive fixture passes semantic validation.
+- [x] Fixture identifiers and semantic objects are unique, and every current lifecycle-state identity
       is represented.
-- [ ] Persistent optional fields have absent and present coverage.
-- [ ] All current authority phases and prepared outcome classes are covered.
-- [ ] Receipt required and optional distinctions are covered.
-- [ ] Object-class, extension, slot, selector, state, and execution negative
+- [x] Persistent optional fields have absent and present coverage.
+- [x] All current authority phases and prepared outcome classes are covered.
+- [x] Receipt required, lineage, optional, authority-release, and state-binding
+      distinctions are covered.
+- [x] Object-class, extension, slot, selector, record identifier, state, and execution negative
       semantic tests pass.
-- [ ] Workspace formatting, checks, Clippy, tests, dependency inspection, and
+- [x] Workspace formatting, checks, Clippy, tests, dependency inspection, and
       `git diff --check` pass.
-- [ ] Documentation makes no byte-level, cryptographic, interoperability, or
+- [x] Documentation makes no byte-level, cryptographic, interoperability, or
       hardware claim.
-- [ ] Independent adversarial review is complete.
+- [x] Independent adversarial review is complete, with evidence in
+      [the Increment 5 adversarial report](reviews/PHASE1_INCREMENT5_ADVERSARIAL_REVIEW.md).
 
 The tranche exits only after every item is satisfied and the review commit is
 merged.

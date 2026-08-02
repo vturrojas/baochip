@@ -8,7 +8,10 @@ Status: Phase 0 plan for the first Rust model increment.
 - **Transition-table tests:** every lifecycle state crossed with every command category.
 - **Property tests:** generated command sequences preserve invariants and never reuse protected counter scopes.
 - **Interruption tests:** reset or persistent-write failure at every injection point.
-- **Vector tests:** validated candidate-neutral semantic objects in `baochip-semantic-fixtures`, stable abstract receipt claims, and later candidate-specific encoded positive/negative vectors.
+- **Vector tests:** validated candidate-neutral semantic objects and cross-object
+  authority-release bindings in `baochip-semantic-fixtures`, stable abstract
+  receipt claims, and later candidate-specific encoded positive/negative
+  vectors.
 - **Model exploration:** bounded enumeration of short command sequences from every reachable state.
 
 ## Requirement-to-test mapping
@@ -39,6 +42,10 @@ Status: Phase 0 plan for the first Rust model increment.
 12. A corrupted committed selection is never rolled back to an obsolete record.
 13. Integrity-recovery errors preserve every slot, selector, outcome, and phase field.
 14. A rejection that intentionally enters `FAULT` is committed as a complete durable snapshot.
+15. Semantic authority fixtures bind phase identifiers to the exact previous
+    and next record identifiers without wrap.
+16. A semantic receipt release binds a required key-generation context and the
+    matching committed authority subject and snapshot identifier.
 
 ## First increment acceptance gate
 

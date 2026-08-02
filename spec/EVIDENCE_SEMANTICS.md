@@ -22,6 +22,7 @@ A cryptographically valid receipt establishes only that the identified evidence-
 | `integrity_suite` | yes | Identifier for future signature, digest, and related algorithm choices |
 | `key_id` | yes | Identifier used to locate the evidence verification key and associated endorsements |
 | `key_generation_context` | yes | Provisioning lineage or evidence-key generation needed to prevent cross-generation substitution |
+| `authority_commit_id` | yes | Logical persistent-snapshot identifier whose selector commit released the receipt; not a cryptographic digest |
 | `lifecycle_state` | yes | Authenticated lifecycle state at receipt commitment |
 | `device_generation` | yes | Rollback-relevant identity or provisioning generation |
 | `transition_counter` | yes | Lifecycle-transition order within the declared device generation |
@@ -43,6 +44,12 @@ The future authenticated receipt envelope must bind all present claims, their
 types, their ordering or canonical map representation, and their interpretation
 under `profile` and `schema_version`. This is a semantic requirement, not a
 claim that an envelope or canonical bytes exist.
+
+Receipt release is valid only after the selected snapshot becomes
+authoritative. The receipt subject and `authority_commit_id` must match that
+`Committed` authority context, and every claim shared with the authoritative
+persistent state must agree. A bare commit identifier does not authenticate the
+record and cannot substitute for the future integrity mechanism.
 
 Digest inputs use explicit domain separation. A measurement event, policy digest, input commitment, and output commitment cannot share an undifferentiated hash domain.
 

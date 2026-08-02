@@ -105,7 +105,7 @@ Authority metadata contains the information needed to distinguish `Clean`,
 |---|---|
 | transaction phase | exactly `Clean`, `Prepared`, or `Committed` |
 | raw selected slot | present for every phase; it is authoritative only after its selector appraisal succeeds |
-| record-presence bitmap | identifies which of the two logical slots contain complete records |
+| per-slot record commit identifiers | absent for an empty slot; otherwise identify the complete record and therefore also encode record presence without a contradictory second bitmap |
 | prepared candidate slot | present only in `Prepared` and distinct from the previous-authority slot |
 | previous slot | present only in `Committed` and distinct from the selected-next slot |
 | selected-next slot | present only in `Committed` and equal to the selected slot after selector commit |
@@ -122,6 +122,12 @@ cannot confuse outcomes across transactions.
 The eventual physical design may encode this information differently or use
 redundant selectors. Any replacement must preserve the same authority
 distinctions and recovery invariants.
+
+For `Prepared` and `Committed`, the phase `commit_id` equals the candidate or
+selected record identifier and is the checked successor of the previous
+record identifier. Overflow, disagreement, or a missing referenced identifier
+fails closed. `Clean` contains exactly the selected record identifier and no
+inactive identifier.
 
 An integrity verdict is a local appraisal result, not trusted protected data.
 It MUST NOT be serialized as a claim that makes itself valid. The eventual
@@ -140,7 +146,8 @@ encoding, redundancy, and physical realization of this split remain deferred.
 
 The future receipt projection incorporates every normative claim in
 `EVIDENCE_SEMANTICS.md`: `profile`, `schema_version`, `integrity_suite`,
-`key_id`, key-generation or provisioning-lineage context, `lifecycle_state`,
+`key_id`, key-generation or provisioning-lineage context,
+`authority_commit_id`, `lifecycle_state`,
 `device_generation`, `transition_counter`, `measurement_epoch`, conditional
 `receipt_sequence`, `active_version`, conditional `challenge`,
 `measurement_root`, `measurement_context`, `policy_id`, `policy_version`,
@@ -157,6 +164,20 @@ from the future semantic projection.
 
 Receipt protection cannot be reused as persistent-state protection. The
 semantic object class is always bound.
+
+`authority_commit_id` identifies the authoritative persistent snapshot whose
+selector commit released the receipt. A semantic release check also requires
+matching subject scope and `Committed` authority metadata. Every receipt field
+also present in that snapshot must match it exactly; conditional receipt
+sequence is compared when present. The identifier is logical ordering and
+cross-object binding metadata, not a hash, signature, or physical-durability
+claim.
+
+The receipt lineage context is an explicit semantic choice: either an evidence
+key generation equal to the subject's present key-generation value, or a
+provisioning generation equal to the receipt's device generation with no
+separate key-generation claim. An absent optional key-generation value does not
+erase the required lineage context.
 
 ## Lifecycle-audit boundary
 

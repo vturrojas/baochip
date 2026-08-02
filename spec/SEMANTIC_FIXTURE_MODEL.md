@@ -22,7 +22,8 @@ The corpus contains:
 
 - complete executable-model persistent-state projections;
 - complete current authority metadata for `Clean`, `Prepared`, and
-  `Committed`, including record presence and prepared outcomes; and
+  `Committed`, including per-slot record commit identifiers and prepared
+  outcomes; and
 - the future execution-receipt projection required by the evidence semantics,
   clearly separated from the smaller receipt subset currently emitted by the
   lifecycle model.
@@ -44,7 +45,11 @@ The initial positive fixtures exercise:
 - both logical record slots;
 - `Clean`, prepared-applied, prepared-rejected, and `Committed` authority;
 - record-presence and selected/previous/candidate slot relationships;
+- checked-successor relationships among previous, candidate, selected, and
+  phase commit identifiers;
 - complete staged `Execution` or `Rejection` distinctions;
+- receipt release bound to a committed authority subject, commit identifier,
+  and every overlapping authoritative persistent-state claim;
 - required receipt values and absent/present receipt optionals;
 - byte, text, Boolean, and unsigned extension value types; and
 - critical and noncritical extensions.
@@ -61,11 +66,18 @@ The crate rejects fixture objects that contain:
 - a slot outside the two-slot model;
 - duplicate or non-increasing extension identifiers;
 - inconsistent provisioning or pending-update state;
+- lifecycle/identity-eligibility combinations that the executable model cannot
+  produce;
 - subject generation inconsistent with the protected payload;
+- a receipt whose required key-generation or provisioning-generation lineage
+  contradicts its subject scope;
 - missing or unexpected records for the declared authority phase;
 - candidate, previous, next, or selector slot conflicts;
+- phase/record commit-identifier mismatch or checked-successor overflow;
 - a committed selector that does not select the declared next record;
-- a prepared execution whose receipt contradicts its audit; or
+- a prepared execution whose receipt contradicts its operational audit;
+- a receipt released under a noncommitted, different-subject, different-
+  commit, or contradictory authoritative-state context; or
 - an empty required receipt commitment.
 
 These are semantic fixture errors. They are not byte-parser rejection codes
@@ -101,3 +113,12 @@ public model snapshots without exposing mutable state-loading APIs.
 The corpus provides no negative byte vectors, parser, encoder, independent
 decoder, benchmark, cryptographic mechanism, selector/phase trust split,
 durability evidence, RTL, FPGA result, or hardware claim.
+
+The authority-release check is a semantic cross-object consistency check. A
+commit identifier is not a digest or cryptographic commitment, and the check
+does not authenticate either object.
+
+Receipt lineage is an explicit required choice between key generation and
+provisioning generation. The fixture validator checks the selected mode against
+the protected subject instead of treating optional key generation as the only
+valid lineage source.

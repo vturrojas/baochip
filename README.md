@@ -46,6 +46,9 @@ Phase 1 Increment 3 adds policy for abstract corrupted-record and corrupted-sele
 Phase 1 Increment 4 defines the [Canonical Record Model](spec/CANONICAL_RECORD_MODEL.md) and an [Encoding Evaluation Plan](docs/ENCODING_EVALUATION_PLAN.md). It establishes an explicit semantic comparison inventory for future prototypes without selecting canonical bytes, an encoding family, or a cryptographic suite. Independent selector and phase-metadata appraisal remains a documented blocker before the abstract corruption-recovery policy can be realized.
 
 Phase 1 Increment 5 begins the candidate-neutral executable fixture layer in [`crates/baochip-semantic-fixtures`](crates/baochip-semantic-fixtures). It supplies typed positive semantic objects and validation invariants for future encoding experiments. It produces no protocol bytes, parser, cryptographic result, or interoperability claim. See the [Semantic Fixture Model](spec/SEMANTIC_FIXTURE_MODEL.md).
+The fixture layer also checks logical receipt release against matching
+committed authority metadata; this is cross-object semantic consistency, not
+authentication or physical durability.
 
 Local validation:
 

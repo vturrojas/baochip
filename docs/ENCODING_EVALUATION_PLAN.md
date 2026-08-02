@@ -54,6 +54,8 @@ produce:
 
 - an adapter from the versioned `baochip-semantic-fixtures` corpus, with any
   unsupported semantic value reported rather than silently omitted;
+- preservation of the fixture corpus's semantic cross-object bindings,
+  including receipt release against committed authority metadata;
 - canonical encodings for boundary values and every optional-field state;
 - decode and re-encode stability results;
 - explicit rejection codes for malformed inputs;
