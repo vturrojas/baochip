@@ -30,6 +30,15 @@ The required semantic inputs to that future mechanism are enumerated in
 [Canonical Record Model](CANONICAL_RECORD_MODEL.md). Increment 4 defines those
 inputs but still produces no canonical bytes or real verdict mechanism.
 
+The current executable model assumes that structurally valid phase metadata
+remains trustworthy when the selector verdict is `Corrupted`; it has no
+independent phase-metadata verdict. A future realization must protect and
+appraise selector representation and recovery phase metadata independently.
+The selector cannot authenticate the phase metadata used to recover from its
+own corruption. Until that non-circular trust split is modeled, selector-
+corruption recovery is an abstract oracle assumption and an implementation
+blocker, not a realizable integrity or durability result.
+
 ## Authority-preserving recovery rules
 
 ### Clean
@@ -134,6 +143,7 @@ authoritative. A counter-exhaustion injection directly exercises this path.
 - real integrity or authenticity algorithms;
 - torn-write and partial-field corruption;
 - selector encoding and redundancy;
+- independent protection and appraisal of selector versus phase metadata;
 - maliciously coordinated corruption of record and phase metadata;
 - wear, retention, storage geometry, and power timing;
 - concurrency and multi-writer arbitration; and

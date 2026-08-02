@@ -1,16 +1,19 @@
 # Phase 1 Increment 4 Exit Review
 
-Status: Proposed design-tranche exit record.
+Status: Independent review and local validation complete; merge pending.
 
 ## Scope completed
 
 - Defined protected semantic object classes.
-- Enumerated the complete persistent-state and authority-metadata projections.
+- Enumerated the complete current persistent-state and authority-metadata
+  projections, including prepared outcomes and record presence.
 - Connected execution receipts to the canonical projection boundary.
 - Defined type, optionality, versioning, extension, and domain-separation
   requirements.
 - Established a comparative encoding evaluation plan.
 - Preserved the open encoding and cryptographic-suite decisions.
+- Recorded independent selector/phase appraisal as a downstream implementation
+  blocker rather than claiming a realizable integrity mechanism.
 
 ## Claims this tranche supports
 
@@ -32,15 +35,19 @@ Status: Proposed design-tranche exit record.
 
 ## Exit checklist
 
-- [ ] Canonical record specification is reviewed against every current model
-      field and evidence claim.
-- [ ] Encoding plan retains at least two serious candidates.
-- [ ] Decision log keeps encoding and cryptographic choices open.
-- [ ] Traceability maps canonicality work to substitution, rollback,
+- [x] Canonical record specification is reviewed against every current model
+      field and evidence claim. Evidence: the
+      [Increment 4 Adversarial Review](reviews/PHASE1_INCREMENT4_ADVERSARIAL_REVIEW.md).
+- [x] Encoding plan retains at least two serious candidates.
+- [x] Decision log keeps encoding and cryptographic choices open.
+- [x] Traceability maps canonicality work to substitution, rollback,
       interruption, and malformed-input threats.
-- [ ] Documentation contains no byte-level or security result that has not been
-      produced.
-- [ ] Independent adversarial review is complete.
+- [x] Final validation and claims scan record no byte-level or security result
+      that has not been produced.
+- [x] Independent adversarial review is complete, including final validation
+      evidence.
 
 The tranche exits only after every item above is satisfied and the review
-commit is merged.
+commit is merged. The documented selector/phase appraisal blocker prevents a
+future integrity implementation, but it does not select a mechanism or convert
+this semantic inventory into an implementation result.

@@ -43,7 +43,7 @@ Atomic state-change experiments are isolated in [`crates/baochip-persistence-mod
 
 Phase 1 Increment 3 adds policy for abstract corrupted-record and corrupted-selector verdicts, plus typed test-only fault injection for otherwise unreachable fail-closed paths. See the [Integrity Recovery Model](spec/INTEGRITY_RECOVERY_MODEL.md). No checksum, digest, signature, serialization, or physical fault detector has been selected or implemented.
 
-Phase 1 Increment 4 defines the [Canonical Record Model](spec/CANONICAL_RECORD_MODEL.md) and an [Encoding Evaluation Plan](docs/ENCODING_EVALUATION_PLAN.md). It freezes the semantic comparison boundary for future prototypes without selecting canonical bytes, an encoding family, or a cryptographic suite.
+Phase 1 Increment 4 defines the [Canonical Record Model](spec/CANONICAL_RECORD_MODEL.md) and an [Encoding Evaluation Plan](docs/ENCODING_EVALUATION_PLAN.md). It establishes an explicit semantic comparison inventory for future prototypes without selecting canonical bytes, an encoding family, or a cryptographic suite. Independent selector and phase-metadata appraisal remains a documented blocker before the abstract corruption-recovery policy can be realized.
 
 Local validation:
 

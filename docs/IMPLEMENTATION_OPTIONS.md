@@ -19,8 +19,9 @@ Rust is selected for host-side research artifacts, not automatically for ROM, fi
 
 | Option | Strengths | Risks | Current position |
 |---|---|---|---|
-| EAT profile over CBOR/CWT and COSE | aligns with IETF RATS/EAT vocabulary; standard claims/profile machinery; interoperability path | EAT is a framework, not a Baochip profile; profile and canonicalization details remain substantial work | leading standards-aligned candidate |
-| Purpose-built deterministic CBOR plus COSE | compact; explicit schema; good constrained-device ecosystem | easy to invent an incompatible private protocol; canonical decoding and extension behavior are security-sensitive | prototype only as a comparison baseline |
+| EAT claims profile represented as a CBOR Web Token, with COSE evaluated separately | aligns with IETF RATS/EAT vocabulary; standard claims/profile machinery; interoperability path | EAT is a framework, CBOR is the encoding, and neither defines a Baochip profile or canonicalization policy | serious candidate; no preference assigned |
+| Purpose-built deterministic CBOR described by CDDL, with COSE evaluated separately | compact; explicit schema; good constrained-device ecosystem | CDDL describes data shape but does not itself enforce canonical decoding or security semantics | serious candidate; no preference assigned |
+| Purpose-built deterministic binary grammar | complete control of accepted forms and streaming behavior | high risk of private-protocol ambiguity, parser defects, and maintenance burden | serious candidate; no preference assigned |
 | Protobuf or another IDL | strong tooling and schema evolution | canonical signing semantics and constrained verification require additional rules; poor direct alignment with EAT | not preferred for the signed evidence core |
 | JSON/JWT | familiar debugging and broad libraries | larger and easier to parse inconsistently; canonical JSON and integer/byte representation complicate deterministic signing | possible presentation form, not preferred core encoding |
 
@@ -50,6 +51,6 @@ Each candidate must demonstrate:
 
 - Rust: accepted for the executable model and reference verifier.
 - Receipt semantics: accepted at the abstract claim level.
-- EAT/CBOR/COSE: leading candidate family, not yet selected as a Baochip profile.
+- Evidence encoding and security envelope: no candidate selected.
 - Cryptographic algorithms: open.
 - FPGA board and RTL language: open.

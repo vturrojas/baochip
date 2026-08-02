@@ -19,11 +19,15 @@ A cryptographically valid receipt establishes only that the identified evidence-
 |---|---:|---|
 | `profile` | yes | Stable identifier for the complete receipt profile |
 | `schema_version` | yes | Version of the claim schema and interpretation rules |
-| `crypto_suite` | yes | Identifier for signature, digest, and related algorithm choices |
+| `integrity_suite` | yes | Identifier for future signature, digest, and related algorithm choices |
 | `key_id` | yes | Identifier used to locate the evidence verification key and associated endorsements |
+| `key_generation_context` | yes | Provisioning lineage or evidence-key generation needed to prevent cross-generation substitution |
 | `lifecycle_state` | yes | Authenticated lifecycle state at receipt commitment |
 | `device_generation` | yes | Rollback-relevant identity or provisioning generation |
-| `sequence` | conditional | Monotonic state scoped according to the profile |
+| `transition_counter` | yes | Lifecycle-transition order within the declared device generation |
+| `measurement_epoch` | yes | Measurement-session scope for the committed transcript |
+| `receipt_sequence` | conditional | Receipt order within the profile-declared identity and generation scope |
+| `active_version` | yes | Active implementation version at receipt commitment |
 | `challenge` | conditional | Verifier-supplied freshness value for challenge-response use |
 | `measurement_root` | yes | Domain-separated commitment to the ordered measurement transcript |
 | `measurement_context` | yes | Identifier defining what the measurement transcript represents |
@@ -31,11 +35,14 @@ A cryptographically valid receipt establishes only that the identified evidence-
 | `policy_version` | yes | Version or immutable digest of that policy |
 | `input_commitment` | optional | Domain-separated commitment to selected input bytes or structured input |
 | `output_commitment` | optional | Domain-separated commitment to selected output bytes or structured output |
-| `extensions` | optional | Profile-governed extension claims with criticality behavior |
+| `extensions` | optional | Profile-governed typed extension entries carrying identifier, criticality, and value |
 
 ## Required bindings
 
-The authenticated receipt envelope binds all present claims, their types, their ordering or canonical map representation, and their interpretation under `profile` and `schema_version`.
+The future authenticated receipt envelope must bind all present claims, their
+types, their ordering or canonical map representation, and their interpretation
+under `profile` and `schema_version`. This is a semantic requirement, not a
+claim that an envelope or canonical bytes exist.
 
 Digest inputs use explicit domain separation. A measurement event, policy digest, input commitment, and output commitment cannot share an undifferentiated hash domain.
 
@@ -58,7 +65,7 @@ Acceptance of `measurement_root` means the commitment is internally consistent w
 Challenge freshness and monotonic state answer different questions:
 
 - `challenge` helps bind evidence to a verifier request and resist reuse in another exchange;
-- `sequence` helps a verifier reason about ordering or rollback within a documented scope; and
+- `receipt_sequence` helps a verifier reason about ordering or rollback within a documented scope; and
 - neither proves that the measured state remained unchanged after receipt issuance.
 
 The profile must define when each is required, its scope, minimum challenge quality, and verifier retention behavior.
@@ -73,6 +80,11 @@ Every commitment definition must specify canonicalization, media or schema ident
 
 - Unknown noncritical extensions may be retained and ignored according to the profile.
 - Unknown critical extensions cause rejection.
+- Each extension entry is the source of truth for its own criticality. Any
+  derived critical-extension index must match the entries exactly.
+- An accepted unknown noncritical extension remains inside the protected
+  object and must survive decode/re-encode; ignoring its semantics does not
+  permit dropping or rewriting it.
 - Duplicate claim keys, noncanonical encodings, type confusion, and unsupported profile versions cause rejection.
 - Extensions cannot redefine the semantics of mandatory core claims.
 

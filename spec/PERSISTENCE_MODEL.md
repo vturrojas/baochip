@@ -20,8 +20,10 @@ The first model uses two logical records and one authoritative selector:
 - `inactive`: the slot available for the next complete candidate record; and
 - `commit_id`: a monotonically increasing logical record identifier.
 
-Each record contains one complete `StateMachine` snapshot, its `commit_id`, and
-an abstract trusted integrity verdict. Increment 3 recovery policy is defined
+Each record contains one complete `StateMachine` snapshot and its `commit_id`;
+the executable model associates an abstract trusted integrity verdict with the
+record. That verdict is a local appraisal input, not a serialized field that
+authenticates itself. Increment 3 recovery policy is defined
 in [Integrity Recovery Model](INTEGRITY_RECOVERY_MODEL.md). The verdict is an
 oracle input, not a result computed from serialized bytes, and implies no
 cryptographic integrity or physical durability. Ordinary callers have no public
@@ -30,6 +32,11 @@ mutation API for setting verdicts.
 The fields a future encoding and integrity layer must bind are enumerated in
 [Canonical Record Model](CANONICAL_RECORD_MODEL.md). The executable persistence
 model does not yet produce that byte representation.
+
+The authority-metadata projection also includes record presence, phase slot
+relationships, phase commit identifiers, and the pending command outcome.
+Selector and phase metadata require independently appraisable protection before
+selector-corruption recovery can be implemented without circular trust.
 
 ## Transaction phases
 

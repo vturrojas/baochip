@@ -14,10 +14,10 @@ the encoding library to define security semantics?
 
 The first comparison retains three serious candidates:
 
-1. A defined EAT profile using deterministic CBOR/CWT concepts and COSE for
-   future protection.
-2. Purpose-defined deterministic CBOR with CDDL, using COSE only after the
-   protected payload is stable.
+1. An EAT claims profile represented as a CWT using deterministic CBOR, with a
+   separately evaluated COSE envelope for future protection.
+2. Purpose-defined deterministic CBOR described by CDDL, with a separately
+   evaluated COSE envelope only after the protected payload is stable.
 3. A purpose-built deterministic binary format with an explicit grammar and
    independent parser.
 
@@ -25,6 +25,12 @@ JSON, generic Protocol Buffers, native Rust serialization, and implementation
 memory layout may be retained as comparison controls, but they are not leading
 candidates without evidence that they satisfy canonicality and constrained
 verification requirements.
+
+EAT is a claims framework, CBOR is an encoding, CDDL describes data shape, and
+COSE provides security-envelope structures. None supplies a Baochip profile,
+canonicalization policy, semantic domain separation, or acceptance policy by
+itself. The custom binary candidate likewise receives no presumption from
+small size or implementation control.
 
 ## Evaluation dimensions
 
@@ -36,7 +42,7 @@ verification requirements.
 | Integrity binding | 10 | Protected headers and payload cover domain, profile, version, suite, and extensions |
 | Extension and downgrade safety | 10 | Version negotiation and critical-extension negative vectors |
 | Independent implementability | 10 | Two implementations agree on vectors without shared encoder code |
-| Constrained cost | 10 | Measured encoded size, parser memory, code size, and verification latency |
+| Constrained cost | 10 | Measured encoded size, peak stack and heap, parser/canonicalizer code size, and latency on a named target |
 | Ecosystem interoperability | 10 | Standards alignment, maintained tooling, offline verification, and reviewability |
 
 No candidate receives a numeric score until its evidence artifact exists.
@@ -51,10 +57,15 @@ produce:
 - explicit rejection codes for malformed inputs;
 - mutations covering truncation, duplicate fields, reordered fields,
   alternate integer widths, overflow, invalid enums, invalid booleans,
-  absent-versus-default confusion, unknown critical fields, and domain
-  substitution;
+  invalid text, normalization differences, absent-versus-default confusion,
+  unknown critical fields, retained unknown noncritical fields, extension
+  criticality mismatch, unsupported-version downgrade attempts, trailing data,
+  resource-limit violations, and domain
+  substitution across object classes, devices, key generations, profiles,
+  schema versions, suites, and extension sets;
 - protected-input bytes separated from any integrity value;
-- encoded size and peak-memory measurements;
+- encoded size, peak stack and heap, code-size, and latency measurements on a
+  named toolchain and target;
 - parser and verifier dependency inventory;
 - reproduction commands and tool versions; and
 - a claim ledger stating exactly what the prototype demonstrates.
@@ -63,7 +74,9 @@ produce:
 
 Before selection, at least two independently implemented decoders must agree
 on all positive vectors and stable rejection classes. They must not share the
-same generated parser, canonicalizer, or unchecked reference library.
+same generated parser, canonicalizer, schema-generated decoding core, or
+unchecked reference library. Merely wrapping the same implementation in a
+second language does not satisfy independence.
 
 One implementation may be the Rust reference path. The second implementation
 language and toolchain remain open.

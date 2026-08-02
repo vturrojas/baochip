@@ -69,7 +69,7 @@ Decisions are provisional until their stated evidence and consequences are recor
 ## BC-0012 — Encoding family remains open
 
 - **Status:** Open
-- **Leading candidate:** A defined EAT profile using CBOR/CWT and COSE, compared against a purpose-built deterministic CBOR baseline.
+- **Candidates:** An EAT claims profile represented as a CWT using deterministic CBOR; purpose-defined deterministic CBOR described by CDDL; and a purpose-built deterministic binary format. Any future COSE envelope is evaluated separately from payload canonicalization.
 - **Evidence needed:** canonical-encoding tests, malformed-input behavior, extension semantics, dependency audit, constrained-resource measurements, and independently generated vectors.
 
 ## BC-0013 — Revocation is permanent for an identity
@@ -117,7 +117,7 @@ Decisions are provisional until their stated evidence and consequences are recor
 ## BC-0020 — Protected object classes are domain-separated
 
 - **Status:** Accepted at the semantic layer
-- **Decision:** Persistent state, authority metadata, execution receipts, endorsements, and reference values are distinct protected object classes. A future integrity mechanism must bind the object class, profile, schema version, suite, critical extensions, and complete class-specific payload.
+- **Decision:** Persistent state, authority metadata, execution receipts, lifecycle audits, endorsements, and reference values are distinct protected object classes. A future integrity mechanism must bind the object class, profile, schema version, suite, subject scope, complete extension set, and complete class-specific payload.
 - **Reason:** Equal-looking fields from different contexts must not be substitutable or verifiable under the wrong security meaning.
 
 ## BC-0021 — Encoding selection requires comparative evidence
