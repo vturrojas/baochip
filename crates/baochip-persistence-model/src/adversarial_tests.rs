@@ -342,6 +342,7 @@ fn clean_phase_rejects_an_untracked_record() {
     durable.slots[1] = Some(Record {
         commit_id: 1,
         state: StateMachine::new(),
+        integrity: IntegrityVerdict::Valid,
     });
     let before = durable.clone();
 

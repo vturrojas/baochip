@@ -35,6 +35,10 @@ Status: Phase 0 plan for the first Rust model increment.
 8. Measurement order and domain affect the accumulator.
 9. Receipt challenges and sequences are bound to the authenticated claim set.
 10. Unknown or unsupported critical semantics fail closed.
+11. A corrupted prepared candidate is never promoted over the previous authority.
+12. A corrupted committed selection is never rolled back to an obsolete record.
+13. Integrity-recovery errors preserve every slot, selector, outcome, and phase field.
+14. A rejection that intentionally enters `FAULT` is committed as a complete durable snapshot.
 
 ## First increment acceptance gate
 

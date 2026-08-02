@@ -39,6 +39,20 @@ pub enum PersistenceOperation {
     RecoveredStable,
     RecoveredPrevious,
     RecoveredNext,
+    RecoveredIntegrityPrevious,
+    RecoveredIntegrityNext,
+    RecoveredIntegritySoleValid,
+}
+
+/// Abstract integrity verdict supplied by a future record-authentication
+/// layer.
+///
+/// This is deliberately not a checksum, digest, MAC, signature, or physical
+/// media claim. Increment 3 models recovery policy after a verdict exists.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum IntegrityVerdict {
+    Valid,
+    Corrupted,
 }
 
 /// Non-secret persistence audit event.
@@ -87,12 +101,19 @@ pub enum PersistenceError {
     CommitIdMismatch,
     CommitIdExhausted,
     SuccessfulCommandWithoutDurableChange,
+    CorruptedSelector,
+    CorruptedActiveRecord,
+    CorruptedCandidateRecord,
+    CorruptedPreviousRecord,
+    AmbiguousIntegrityRecovery,
+    NoValidRecord,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct Record {
     commit_id: u64,
     state: StateMachine,
+    integrity: IntegrityVerdict,
 }
 
 /// Two-slot durable state model with an abstract atomic selector.
@@ -102,6 +123,18 @@ pub struct DurableModel {
     active_slot: usize,
     phase: PersistencePhase,
     prepared_outcome: Option<CommandOutcome>,
+    selector_integrity: IntegrityVerdict,
+}
+
+/// Typed integrity faults available only to this crate's tests.
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum IntegrityTestFault {
+    ActiveRecord,
+    InactiveRecord,
+    Selector,
+    AllRecords,
+    DuplicateActiveRecord,
 }
 
 impl DurableModel {
@@ -112,12 +145,14 @@ impl DurableModel {
                 Some(Record {
                     commit_id: 0,
                     state: initial_state,
+                    integrity: IntegrityVerdict::Valid,
                 }),
                 None,
             ],
             active_slot: 0,
             phase: PersistencePhase::Clean,
             prepared_outcome: None,
+            selector_integrity: IntegrityVerdict::Valid,
         }
     }
 
@@ -201,6 +236,7 @@ impl DurableModel {
         self.slots[candidate_slot] = Some(Record {
             commit_id,
             state: candidate,
+            integrity: IntegrityVerdict::Valid,
         });
         self.prepared_outcome = Some(outcome);
         self.phase = PersistencePhase::Prepared {
@@ -299,6 +335,15 @@ impl DurableModel {
     ///
     /// Returns an error if the selector identifies no complete active record.
     pub fn crash_and_recover(&mut self) -> Result<PersistenceAudit, PersistenceError> {
+        if self.selector_integrity == IntegrityVerdict::Corrupted
+            || self
+                .slots
+                .iter()
+                .flatten()
+                .any(|record| record.integrity == IntegrityVerdict::Corrupted)
+        {
+            return self.recover_integrity_failure();
+        }
         self.validate_internal_state()?;
         let phase = self.phase;
         match phase {
@@ -356,9 +401,174 @@ impl DurableModel {
         }
     }
 
+    /// Recover after an abstract integrity verdict reports corrupted selector
+    /// or record material.
+    ///
+    /// The plan is fully validated before mutation. Prepared candidates are
+    /// never promoted, and committed selected records are never rolled back to
+    /// an obsolete previous record.
+    fn recover_integrity_failure(&mut self) -> Result<PersistenceAudit, PersistenceError> {
+        match self.phase {
+            PersistencePhase::Clean => {
+                if self.selector_integrity == IntegrityVerdict::Valid {
+                    self.validate_slot_index(self.active_slot)?;
+                    let active =
+                        self.record_at(self.active_slot, PersistenceError::MissingActiveRecord)?;
+                    if active.integrity == IntegrityVerdict::Corrupted {
+                        return Err(PersistenceError::CorruptedActiveRecord);
+                    }
+                    let inactive_slot = self.inactive_slot();
+                    let Some(inactive) = self.slots[inactive_slot].as_ref() else {
+                        return Err(PersistenceError::NoValidRecord);
+                    };
+                    if inactive.integrity == IntegrityVerdict::Valid {
+                        return Err(PersistenceError::AmbiguousIntegrityRecovery);
+                    }
+                    let lifecycle = active.state.lifecycle();
+                    let commit_id = active.commit_id;
+                    self.slots[inactive_slot] = None;
+                    return Ok(PersistenceAudit {
+                        operation: PersistenceOperation::RecoveredIntegritySoleValid,
+                        prior_lifecycle: lifecycle,
+                        resulting_lifecycle: lifecycle,
+                        commit_id,
+                    });
+                }
+
+                let valid_slots: Vec<usize> = self
+                    .slots
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(slot, record)| {
+                        record
+                            .as_ref()
+                            .filter(|record| record.integrity == IntegrityVerdict::Valid)
+                            .map(|_| slot)
+                    })
+                    .collect();
+                let [selected] = valid_slots.as_slice() else {
+                    return if valid_slots.is_empty() {
+                        Err(PersistenceError::NoValidRecord)
+                    } else {
+                        Err(PersistenceError::AmbiguousIntegrityRecovery)
+                    };
+                };
+                let selected = *selected;
+                let record = self.record_at(selected, PersistenceError::MissingActiveRecord)?;
+                let lifecycle = record.state.lifecycle();
+                let commit_id = record.commit_id;
+                let obsolete = 1 - selected;
+                self.slots[obsolete] = None;
+                self.active_slot = selected;
+                self.selector_integrity = IntegrityVerdict::Valid;
+                self.prepared_outcome = None;
+                Ok(PersistenceAudit {
+                    operation: PersistenceOperation::RecoveredIntegritySoleValid,
+                    prior_lifecycle: lifecycle,
+                    resulting_lifecycle: lifecycle,
+                    commit_id,
+                })
+            }
+            PersistencePhase::Prepared { slot, commit_id } => {
+                self.validate_slot_index(slot)?;
+                let previous_slot = 1 - slot;
+                if self.selector_integrity == IntegrityVerdict::Valid
+                    && self.active_slot != previous_slot
+                {
+                    return Err(PersistenceError::SelectorMismatch);
+                }
+                let previous =
+                    self.record_at(previous_slot, PersistenceError::MissingActiveRecord)?;
+                if previous.integrity == IntegrityVerdict::Corrupted {
+                    return Err(PersistenceError::CorruptedActiveRecord);
+                }
+                if let Some(candidate) = self.slots[slot].as_ref() {
+                    if candidate.integrity == IntegrityVerdict::Valid {
+                        let expected = previous
+                            .commit_id
+                            .checked_add(1)
+                            .ok_or(PersistenceError::CommitIdMismatch)?;
+                        if candidate.commit_id != commit_id || commit_id != expected {
+                            return Err(PersistenceError::CommitIdMismatch);
+                        }
+                        if self.prepared_outcome.is_none() {
+                            return Err(PersistenceError::MissingPreparedOutcome);
+                        }
+                    }
+                }
+                let lifecycle = previous.state.lifecycle();
+                let previous_commit_id = previous.commit_id;
+                self.slots[slot] = None;
+                self.active_slot = previous_slot;
+                self.selector_integrity = IntegrityVerdict::Valid;
+                self.prepared_outcome = None;
+                self.phase = PersistencePhase::Clean;
+                Ok(PersistenceAudit {
+                    operation: PersistenceOperation::RecoveredIntegrityPrevious,
+                    prior_lifecycle: lifecycle,
+                    resulting_lifecycle: lifecycle,
+                    commit_id: previous_commit_id,
+                })
+            }
+            PersistencePhase::Committed {
+                previous_slot,
+                active_slot,
+                commit_id,
+            } => {
+                self.validate_slot_index(previous_slot)?;
+                self.validate_slot_index(active_slot)?;
+                if previous_slot == active_slot {
+                    return Err(PersistenceError::SlotConflict);
+                }
+                if self.selector_integrity == IntegrityVerdict::Valid
+                    && self.active_slot != active_slot
+                {
+                    return Err(PersistenceError::SelectorMismatch);
+                }
+                let selected =
+                    self.record_at(active_slot, PersistenceError::MissingActiveRecord)?;
+                if selected.integrity == IntegrityVerdict::Corrupted {
+                    return Err(PersistenceError::CorruptedActiveRecord);
+                }
+                if selected.commit_id != commit_id {
+                    return Err(PersistenceError::CommitIdMismatch);
+                }
+                if let Some(previous) = self.slots[previous_slot].as_ref() {
+                    if previous.integrity == IntegrityVerdict::Valid {
+                        let expected = previous
+                            .commit_id
+                            .checked_add(1)
+                            .ok_or(PersistenceError::CommitIdMismatch)?;
+                        if selected.commit_id != expected {
+                            return Err(PersistenceError::CommitIdMismatch);
+                        }
+                    }
+                }
+                let lifecycle = selected.state.lifecycle();
+                self.slots[previous_slot] = None;
+                self.active_slot = active_slot;
+                self.selector_integrity = IntegrityVerdict::Valid;
+                self.prepared_outcome = None;
+                self.phase = PersistencePhase::Clean;
+                Ok(PersistenceAudit {
+                    operation: PersistenceOperation::RecoveredIntegrityNext,
+                    prior_lifecycle: lifecycle,
+                    resulting_lifecycle: lifecycle,
+                    commit_id,
+                })
+            }
+        }
+    }
+
     fn validate_internal_state(&self) -> Result<(), PersistenceError> {
         self.validate_slot_index(self.active_slot)?;
+        if self.selector_integrity == IntegrityVerdict::Corrupted {
+            return Err(PersistenceError::CorruptedSelector);
+        }
         let active = self.record_at(self.active_slot, PersistenceError::MissingActiveRecord)?;
+        if active.integrity == IntegrityVerdict::Corrupted {
+            return Err(PersistenceError::CorruptedActiveRecord);
+        }
 
         match self.phase {
             PersistencePhase::Clean => {
@@ -375,6 +585,9 @@ impl DurableModel {
                     return Err(PersistenceError::SlotConflict);
                 }
                 let candidate = self.record_at(slot, PersistenceError::MissingCandidateRecord)?;
+                if candidate.integrity == IntegrityVerdict::Corrupted {
+                    return Err(PersistenceError::CorruptedCandidateRecord);
+                }
                 if self.prepared_outcome.is_none() {
                     return Err(PersistenceError::MissingPreparedOutcome);
                 }
@@ -404,6 +617,9 @@ impl DurableModel {
                 }
                 let previous =
                     self.record_at(previous_slot, PersistenceError::MissingPreviousRecord)?;
+                if previous.integrity == IntegrityVerdict::Corrupted {
+                    return Err(PersistenceError::CorruptedPreviousRecord);
+                }
                 let expected_commit_id = previous
                     .commit_id
                     .checked_add(1)
@@ -436,10 +652,54 @@ impl DurableModel {
     const fn inactive_slot(&self) -> usize {
         1 - self.active_slot
     }
+
+    #[cfg(test)]
+    pub(crate) fn inject_test_fault(
+        &mut self,
+        fault: IntegrityTestFault,
+    ) -> Result<(), PersistenceError> {
+        match fault {
+            IntegrityTestFault::ActiveRecord => {
+                self.validate_slot_index(self.active_slot)?;
+                self.slots[self.active_slot]
+                    .as_mut()
+                    .ok_or(PersistenceError::MissingActiveRecord)?
+                    .integrity = IntegrityVerdict::Corrupted;
+            }
+            IntegrityTestFault::InactiveRecord => {
+                self.validate_slot_index(self.active_slot)?;
+                let inactive = self.inactive_slot();
+                self.slots[inactive]
+                    .as_mut()
+                    .ok_or(PersistenceError::MissingCandidateRecord)?
+                    .integrity = IntegrityVerdict::Corrupted;
+            }
+            IntegrityTestFault::Selector => {
+                self.selector_integrity = IntegrityVerdict::Corrupted;
+            }
+            IntegrityTestFault::AllRecords => {
+                for record in self.slots.iter_mut().flatten() {
+                    record.integrity = IntegrityVerdict::Corrupted;
+                }
+            }
+            IntegrityTestFault::DuplicateActiveRecord => {
+                self.validate_slot_index(self.active_slot)?;
+                let duplicate = self.slots[self.active_slot]
+                    .clone()
+                    .ok_or(PersistenceError::MissingActiveRecord)?;
+                let inactive = self.inactive_slot();
+                self.slots[inactive] = Some(duplicate);
+            }
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod adversarial_tests;
+
+#[cfg(test)]
+mod integrity_tests;
 
 #[cfg(test)]
 mod tests {

@@ -20,7 +20,7 @@ The first model uses two logical records and one authoritative selector:
 - `inactive`: the slot available for the next complete candidate record; and
 - `commit_id`: a monotonically increasing logical record identifier.
 
-Each record contains one complete `StateMachine` snapshot and its `commit_id`. Integrity metadata is abstracted until the corruption model is added.
+Each record contains one complete `StateMachine` snapshot, its `commit_id`, and an abstract integrity verdict. Increment 3 recovery policy is defined in [Integrity Recovery Model](INTEGRITY_RECOVERY_MODEL.md). The verdict is not yet computed from serialized bytes.
 
 ## Transaction phases
 

@@ -11,5 +11,8 @@ publish = false
 [dependencies]
 baochip-model = { path = "../baochip-model" }
 
+[dev-dependencies]
+baochip-model = { path = "../baochip-model", features = ["test-support"] }
+
 [lints]
 workspace = true

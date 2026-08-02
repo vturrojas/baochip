@@ -29,7 +29,7 @@ Status: Phase 0 working matrix. “Planned evidence” identifies how a future c
 | `BCT-004` | `BCR-FRE-002`–`004`, `BCR-LIF-002`–`004` | adversarial state transitions, stale-image tests, counter persistence model |
 | `BCT-005` | `BCR-MEA-001`–`004`, `BCR-EVI-003` | transcript permutation tests, domain-separation vectors, disclosure tests |
 | `BCT-006` | `BCR-ID-002`, `003`, `BCR-LIF-001`–`004` | lifecycle transition model, authorization negative tests, recovery analysis |
-| `BCT-007` | `BCR-FRE-003`, `BCR-LIF-001`, `002`, `BCR-ASR-001` | exhaustive interruption points, atomicity model, reset fuzzing |
+| `BCT-007` | `BCR-FRE-003`, `BCR-LIF-001`, `002`, `BCR-ASR-001` | exhaustive interruption points, atomicity model, typed record/selector corruption injection, reset fuzzing |
 | `BCT-008` | `BCR-EVI-005`, `BCR-MEA-003`, `005`, `BCR-VER-002` | verifier-layer tests, documentation review, prohibited-inference cases |
 | `BCT-009` | `BCR-ID-002`, `004` | linkability analysis, pseudonymous-profile comparison, privacy review |
 | `BCT-010` | `BCR-EVI-003`, `004`, `BCR-VER-003`, `004` | malformed corpus, version downgrade tests, critical-extension tests |

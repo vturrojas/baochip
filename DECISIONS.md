@@ -95,3 +95,15 @@ Decisions are provisional until their stated evidence and consequences are recor
 - **Status:** Accepted
 - **Decision:** The Verifier Owner selects trust anchors, accepted Endorsers, Reference Value Providers, and appraisal policy. Baochip does not require a project-operated verification or trust-anchor service.
 - **Reason:** Independent appraisal and explicit trust configuration are core research goals.
+
+## BC-0017 — Integrity verdict before integrity mechanism
+
+- **Status:** Accepted for the executable model
+- **Decision:** Model record and selector recovery using an abstract `Valid` or `Corrupted` verdict before selecting serialization, checksums, digests, MACs, signatures, or physical storage.
+- **Reason:** Recovery authority semantics can be falsified independently of an implementation mechanism, while explicit naming prevents the model from becoming an unsupported cryptographic or durability claim.
+
+## BC-0018 — Recovery preserves authority rather than availability
+
+- **Status:** Accepted
+- **Decision:** A prepared candidate is never promoted after loss of its previous authority, and a corrupted committed selection is never rolled back to an obsolete record. Ambiguous or impossible recovery fails closed without mutation.
+- **Reason:** Continuing from a convenient record would allow corruption to redefine the commit boundary, defeat revocation or rollback policy, and turn availability pressure into an authority bypass.

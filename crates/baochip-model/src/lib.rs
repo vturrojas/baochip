@@ -202,6 +202,18 @@ pub struct StateMachine {
     identity_active: bool,
 }
 
+/// Typed fault conditions available only when the explicit `test-support`
+/// feature is enabled.
+///
+/// This API exists to exercise otherwise unreachable fail-closed paths. It is
+/// not part of the Baochip production model and the feature is disabled by
+/// default.
+#[cfg(feature = "test-support")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ModelTestFault {
+    ReceiptSequenceExhausted,
+}
+
 impl Default for StateMachine {
     fn default() -> Self {
         Self::new()
@@ -253,6 +265,19 @@ impl StateMachine {
     #[must_use]
     pub const fn active_version(&self) -> u64 {
         self.active_version
+    }
+
+    /// Inject an explicitly typed model fault for cross-crate tests.
+    ///
+    /// This method is compiled only with the non-default `test-support`
+    /// feature. It must never be used as a state-loading or recovery API.
+    #[cfg(feature = "test-support")]
+    pub fn inject_test_fault(&mut self, fault: ModelTestFault) {
+        match fault {
+            ModelTestFault::ReceiptSequenceExhausted => {
+                self.receipt_sequence = u64::MAX;
+            }
+        }
     }
 
     /// Apply one deterministic command to the committed model state.
