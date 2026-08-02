@@ -16,7 +16,10 @@ mutating the recoverable model.
 
 Each logical record and the authoritative selector carry an
 `IntegrityVerdict` of `Valid` or `Corrupted`. The verdict is a trusted input to
-this increment's recovery policy. It is not computed from record bytes.
+this increment's recovery policy. It is an abstract oracle, not computed from
+record bytes, and makes no claim about cryptography, serialization, atomic
+media, or physical durability. Ordinary callers have no public mutation API to
+set these verdicts; typed injection is confined to test-only support.
 
 A later encoding and authentication increment must replace this oracle with a
 mechanism that binds every security-relevant field, record identity, slot
@@ -27,6 +30,7 @@ the state machine responds after a verdict exists.
 
 ### Clean
 
+- Structural validation requires no pending command outcome.
 - A valid selector and valid selected record remain authoritative.
 - A corrupted selected record is an explicit failure; an unselected record is
   never promoted merely because it is valid.
@@ -37,30 +41,51 @@ the state machine responds after a verdict exists.
 
 ### Prepared
 
+- Structural validation requires a pending command outcome, an in-range
+  candidate slot, and a phase commit identifier that is the checked successor
+  of the valid previous record. When the selector is valid, the candidate slot
+  must be distinct from the selected previous slot. These requirements apply
+  even when the candidate record is corrupted or missing.
 - The candidate has not crossed the selector-commit boundary.
 - A corrupted or incomplete candidate is discarded when the complete previous
   authoritative record remains valid.
 - A corrupted previous authoritative record is not replaced by the candidate.
 - If the selector verdict is corrupted, structurally valid `Prepared` phase
-  metadata identifies the non-candidate slot as the previous authority.
+  metadata identifies the non-candidate slot as the previous authority; the raw
+  selector payload is ignored.
+- No field of a record whose verdict is `Corrupted`, including its commit
+  identifier or lifecycle, is trusted.
 - Recovery never releases the prepared command outcome.
 
 ### Committed
 
+- Structural validation requires no pending command outcome and requires the
+  distinct previous record to be present even when its verdict is `Corrupted`.
 - The selected next record is authoritative.
 - A corrupted obsolete previous record may be discarded.
 - A corrupted selected next record is an explicit failure; recovery never
   rolls back to the obsolete record.
 - If the selector verdict is corrupted, structurally valid `Committed` phase
-  metadata identifies the selected next slot.
+  metadata identifies the selected next slot; the raw selector payload is
+  ignored.
 - The selected record identifier must agree with phase metadata and, whenever
   the previous record remains valid, be its checked successor.
 
+### Audit provenance
+
+- Successful recovery audit commit identifiers come from the trustworthy
+  selected record, not untrusted selector, phase, or corrupted-record fields.
+- When a discarded candidate or previous record is `Valid`, its lifecycle is
+  the audit's prior lifecycle. When that discarded record is `Corrupted` or
+  absent where absence is permitted, its lifecycle is not trusted and the
+  trustworthy selected lifecycle is duplicated as the prior lifecycle.
+
 ## Mutation rule
 
-Recovery computes and validates a complete plan before changing a slot,
-selector, outcome, or phase. Every failed recovery returns a stable error and
-preserves the complete `DurableModel`.
+Recovery first validates structural phase and outcome metadata, then computes
+and validates a complete plan before changing a slot, selector, outcome, or
+phase. Every failed recovery returns a stable error and preserves the complete
+`DurableModel`.
 
 ## Typed test injection
 
@@ -88,6 +113,11 @@ authoritative. A counter-exhaustion injection directly exercises this path.
   selected next record;
 - a corrupted selected committed record never causes rollback;
 - selector corruption follows phase authority only when unambiguous;
+- selector-corrupted recovery ignores the raw selector payload;
+- malformed phase/outcome metadata fails before mutation, including when a
+  record verdict is corrupted;
+- successful recovery audits use only trustworthy lifecycle and commit-ID
+  provenance;
 - zero-valid-record and ambiguous cases fail closed without mutation;
 - rejected-to-`FAULT` persistence has a direct bounded test;
 - fault injection is typed and excluded from default lifecycle builds;

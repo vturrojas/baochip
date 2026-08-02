@@ -410,6 +410,9 @@ impl DurableModel {
     fn recover_integrity_failure(&mut self) -> Result<PersistenceAudit, PersistenceError> {
         match self.phase {
             PersistencePhase::Clean => {
+                if self.prepared_outcome.is_some() {
+                    return Err(PersistenceError::UnexpectedPreparedOutcome);
+                }
                 if self.selector_integrity == IntegrityVerdict::Valid {
                     self.validate_slot_index(self.active_slot)?;
                     let active =
@@ -471,6 +474,9 @@ impl DurableModel {
             }
             PersistencePhase::Prepared { slot, commit_id } => {
                 self.validate_slot_index(slot)?;
+                if self.prepared_outcome.is_none() {
+                    return Err(PersistenceError::MissingPreparedOutcome);
+                }
                 let previous_slot = 1 - slot;
                 if self.selector_integrity == IntegrityVerdict::Valid
                     && self.active_slot != previous_slot
@@ -482,22 +488,24 @@ impl DurableModel {
                 if previous.integrity == IntegrityVerdict::Corrupted {
                     return Err(PersistenceError::CorruptedActiveRecord);
                 }
+                let expected = previous
+                    .commit_id
+                    .checked_add(1)
+                    .ok_or(PersistenceError::CommitIdMismatch)?;
+                if commit_id != expected {
+                    return Err(PersistenceError::CommitIdMismatch);
+                }
+                let previous_lifecycle = previous.state.lifecycle();
+                let previous_commit_id = previous.commit_id;
+                let mut prior_lifecycle = previous_lifecycle;
                 if let Some(candidate) = self.slots[slot].as_ref() {
                     if candidate.integrity == IntegrityVerdict::Valid {
-                        let expected = previous
-                            .commit_id
-                            .checked_add(1)
-                            .ok_or(PersistenceError::CommitIdMismatch)?;
-                        if candidate.commit_id != commit_id || commit_id != expected {
+                        if candidate.commit_id != commit_id {
                             return Err(PersistenceError::CommitIdMismatch);
                         }
-                        if self.prepared_outcome.is_none() {
-                            return Err(PersistenceError::MissingPreparedOutcome);
-                        }
+                        prior_lifecycle = candidate.state.lifecycle();
                     }
                 }
-                let lifecycle = previous.state.lifecycle();
-                let previous_commit_id = previous.commit_id;
                 self.slots[slot] = None;
                 self.active_slot = previous_slot;
                 self.selector_integrity = IntegrityVerdict::Valid;
@@ -505,8 +513,8 @@ impl DurableModel {
                 self.phase = PersistencePhase::Clean;
                 Ok(PersistenceAudit {
                     operation: PersistenceOperation::RecoveredIntegrityPrevious,
-                    prior_lifecycle: lifecycle,
-                    resulting_lifecycle: lifecycle,
+                    prior_lifecycle,
+                    resulting_lifecycle: previous_lifecycle,
                     commit_id: previous_commit_id,
                 })
             }
@@ -520,11 +528,16 @@ impl DurableModel {
                 if previous_slot == active_slot {
                     return Err(PersistenceError::SlotConflict);
                 }
+                if self.prepared_outcome.is_some() {
+                    return Err(PersistenceError::UnexpectedPreparedOutcome);
+                }
                 if self.selector_integrity == IntegrityVerdict::Valid
                     && self.active_slot != active_slot
                 {
                     return Err(PersistenceError::SelectorMismatch);
                 }
+                let previous =
+                    self.record_at(previous_slot, PersistenceError::MissingPreviousRecord)?;
                 let selected =
                     self.record_at(active_slot, PersistenceError::MissingActiveRecord)?;
                 if selected.integrity == IntegrityVerdict::Corrupted {
@@ -533,18 +546,20 @@ impl DurableModel {
                 if selected.commit_id != commit_id {
                     return Err(PersistenceError::CommitIdMismatch);
                 }
-                if let Some(previous) = self.slots[previous_slot].as_ref() {
-                    if previous.integrity == IntegrityVerdict::Valid {
-                        let expected = previous
-                            .commit_id
-                            .checked_add(1)
-                            .ok_or(PersistenceError::CommitIdMismatch)?;
-                        if selected.commit_id != expected {
-                            return Err(PersistenceError::CommitIdMismatch);
-                        }
+                let selected_lifecycle = selected.state.lifecycle();
+                let selected_commit_id = selected.commit_id;
+                let prior_lifecycle = if previous.integrity == IntegrityVerdict::Valid {
+                    let expected = previous
+                        .commit_id
+                        .checked_add(1)
+                        .ok_or(PersistenceError::CommitIdMismatch)?;
+                    if selected.commit_id != expected {
+                        return Err(PersistenceError::CommitIdMismatch);
                     }
-                }
-                let lifecycle = selected.state.lifecycle();
+                    previous.state.lifecycle()
+                } else {
+                    selected_lifecycle
+                };
                 self.slots[previous_slot] = None;
                 self.active_slot = active_slot;
                 self.selector_integrity = IntegrityVerdict::Valid;
@@ -552,9 +567,9 @@ impl DurableModel {
                 self.phase = PersistencePhase::Clean;
                 Ok(PersistenceAudit {
                     operation: PersistenceOperation::RecoveredIntegrityNext,
-                    prior_lifecycle: lifecycle,
-                    resulting_lifecycle: lifecycle,
-                    commit_id,
+                    prior_lifecycle,
+                    resulting_lifecycle: selected_lifecycle,
+                    commit_id: selected_commit_id,
                 })
             }
         }

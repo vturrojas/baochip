@@ -1,6 +1,6 @@
 # Persistence and Interruption Model
 
-Status: Phase 1 Increment 2 behavioral specification. This is an abstract atomic-storage model, not a claim about flash, EEPROM, fuses, filesystems, or FPGA hardware.
+Status: Phase 1 Increment 3 behavioral specification. This is an abstract atomic-storage model, not a claim about flash, EEPROM, fuses, filesystems, or FPGA hardware.
 
 ## Objective
 
@@ -20,7 +20,12 @@ The first model uses two logical records and one authoritative selector:
 - `inactive`: the slot available for the next complete candidate record; and
 - `commit_id`: a monotonically increasing logical record identifier.
 
-Each record contains one complete `StateMachine` snapshot, its `commit_id`, and an abstract integrity verdict. Increment 3 recovery policy is defined in [Integrity Recovery Model](INTEGRITY_RECOVERY_MODEL.md). The verdict is not yet computed from serialized bytes.
+Each record contains one complete `StateMachine` snapshot, its `commit_id`, and
+an abstract trusted integrity verdict. Increment 3 recovery policy is defined
+in [Integrity Recovery Model](INTEGRITY_RECOVERY_MODEL.md). The verdict is an
+oracle input, not a result computed from serialized bytes, and implies no
+cryptographic integrity or physical durability. Ordinary callers have no public
+mutation API for setting verdicts.
 
 ## Transaction phases
 
@@ -46,23 +51,33 @@ The obsolete previous record has been erased or made reusable. The model returns
 
 ## Complete internal invariant
 
-Before any persistence operation reads, selects, or clears a record, the model
-validates the complete phase/selector/record relationship:
+Before an ordinary persistence operation reads, selects, or clears a record,
+the model validates the complete phase/selector/record relationship:
 
 - every referenced slot index is in range;
 - the authoritative selector identifies a complete record;
-- `Clean` has no untracked candidate record or pending command outcome;
+- `Clean` has no untracked candidate record and forbids a pending command
+  outcome;
 - `Prepared` identifies a complete inactive record distinct from the active
-  slot, binds its pending command outcome, and agrees with that record's
-  `commit_id`;
+  slot, requires and binds its pending command outcome, and agrees with that
+  record's `commit_id`;
 - `Committed` agrees with the actual selector, identifies a distinct complete
-  previous record, and agrees with the selected record's `commit_id`; and
+  previous record, forbids a pending command outcome, and agrees with the
+  selected record's `commit_id`; and
 - every candidate or selected next identifier is exactly the checked successor
   of the previous authoritative identifier.
 
-Invariant errors are stable and leave the complete model unchanged. Recovery
-validates every record it will use before clearing either slot, so a malformed
-phase cannot erase the only recoverable record.
+Invariant errors are stable and leave the complete model unchanged.
+Integrity-aware recovery uses the authority-preserving rules in the Integrity
+Recovery Model rather than requiring every corrupted or incomplete record to
+satisfy the ordinary invariant. It still validates structural phase, slot,
+required-record, outcome, and trustworthy identifier metadata before clearing
+either slot, so malformed metadata cannot erase the only recoverable record.
+`Prepared` recovery requires the phase identifier to be the checked successor
+of the valid previous record even when the candidate is corrupted or missing;
+fields from a corrupted record are never trusted. `Committed` recovery
+requires the previous record to remain structurally present even when its
+verdict is `Corrupted`.
 
 ## Rejected commands
 
@@ -102,10 +117,10 @@ Every preparation, commit, cleanup, rejected command, and simulated crash return
 
 This does not yet satisfy the complete lifecycle authorization-audit schema.
 
-## Initial exclusions
+## Current exclusions
 
 - torn writes within a record;
-- corrupted selector or record integrity metadata;
+- computation or authentication of selector and record integrity verdicts;
 - wear, retention, power timing, and storage geometry;
 - concurrency and multi-writer access;
 - real serialization or checksums;
@@ -114,7 +129,7 @@ This does not yet satisfy the complete lifecycle authorization-audit schema.
 
 These are explicit later increments. The two-slot model first establishes transaction semantics and test injection points.
 
-## Increment 2 acceptance gate
+## Increment 3 persistence acceptance gate
 
 - crashes in `Prepared` recover the exact previous snapshot;
 - crashes in `Committed` recover the exact next snapshot;
