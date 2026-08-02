@@ -26,6 +26,10 @@ mechanism that binds every security-relevant field, record identity, slot
 context, version, and selector metadata. Until then, the model proves only how
 the state machine responds after a verdict exists.
 
+The required semantic inputs to that future mechanism are enumerated in
+[Canonical Record Model](CANONICAL_RECORD_MODEL.md). Increment 4 defines those
+inputs but still produces no canonical bytes or real verdict mechanism.
+
 ## Authority-preserving recovery rules
 
 ### Clean

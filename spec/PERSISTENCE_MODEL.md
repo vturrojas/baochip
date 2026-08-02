@@ -27,6 +27,10 @@ oracle input, not a result computed from serialized bytes, and implies no
 cryptographic integrity or physical durability. Ordinary callers have no public
 mutation API for setting verdicts.
 
+The fields a future encoding and integrity layer must bind are enumerated in
+[Canonical Record Model](CANONICAL_RECORD_MODEL.md). The executable persistence
+model does not yet produce that byte representation.
+
 ## Transaction phases
 
 ### Clean

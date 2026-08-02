@@ -43,6 +43,8 @@ Atomic state-change experiments are isolated in [`crates/baochip-persistence-mod
 
 Phase 1 Increment 3 adds policy for abstract corrupted-record and corrupted-selector verdicts, plus typed test-only fault injection for otherwise unreachable fail-closed paths. See the [Integrity Recovery Model](spec/INTEGRITY_RECOVERY_MODEL.md). No checksum, digest, signature, serialization, or physical fault detector has been selected or implemented.
 
+Phase 1 Increment 4 defines the [Canonical Record Model](spec/CANONICAL_RECORD_MODEL.md) and an [Encoding Evaluation Plan](docs/ENCODING_EVALUATION_PLAN.md). It freezes the semantic comparison boundary for future prototypes without selecting canonical bytes, an encoding family, or a cryptographic suite.
+
 Local validation:
 
 ```text
@@ -59,7 +61,7 @@ cargo test --all-targets
 
 Contributions should separate proposals, implementations, experiments, and results. Results must identify the exact artifact, configuration, threat model, and reproduction procedure used.
 
-Start with the [Project Charter](PROJECT_CHARTER.md), then review the [Research Program](docs/RESEARCH_PROGRAM.md), [Prior-Art Matrix](docs/PRIOR_ART_MATRIX.md), [Threat Model](docs/THREAT_MODEL.md), [Threat Traceability](docs/TRACEABILITY_MATRIX.md), [Security Requirements](spec/SECURITY_REQUIREMENTS.md), [Lifecycle State Machine](spec/LIFECYCLE_STATE_MACHINE.md), [Authority Model](spec/AUTHORITY_MODEL.md), [Counter Model](spec/COUNTER_MODEL.md), [Evidence Semantics](spec/EVIDENCE_SEMANTICS.md), [Trust Model](docs/TRUST_MODEL.md), [Executable Model Specification](spec/EXECUTABLE_MODEL.md), [Persistence Model](spec/PERSISTENCE_MODEL.md), [Integrity Recovery Model](spec/INTEGRITY_RECOVERY_MODEL.md), [Model Test Plan](docs/MODEL_TEST_PLAN.md), [Implementation Options](docs/IMPLEMENTATION_OPTIONS.md), [Architecture](docs/ARCHITECTURE.md), [Decision Log](DECISIONS.md), [Phase 0 Exit Review](docs/PHASE0_EXIT_REVIEW.md), and [Roadmap](ROADMAP.md).
+Start with the [Project Charter](PROJECT_CHARTER.md), then review the [Research Program](docs/RESEARCH_PROGRAM.md), [Prior-Art Matrix](docs/PRIOR_ART_MATRIX.md), [Threat Model](docs/THREAT_MODEL.md), [Threat Traceability](docs/TRACEABILITY_MATRIX.md), [Security Requirements](spec/SECURITY_REQUIREMENTS.md), [Lifecycle State Machine](spec/LIFECYCLE_STATE_MACHINE.md), [Authority Model](spec/AUTHORITY_MODEL.md), [Counter Model](spec/COUNTER_MODEL.md), [Evidence Semantics](spec/EVIDENCE_SEMANTICS.md), [Canonical Record Model](spec/CANONICAL_RECORD_MODEL.md), [Trust Model](docs/TRUST_MODEL.md), [Executable Model Specification](spec/EXECUTABLE_MODEL.md), [Persistence Model](spec/PERSISTENCE_MODEL.md), [Integrity Recovery Model](spec/INTEGRITY_RECOVERY_MODEL.md), [Encoding Evaluation Plan](docs/ENCODING_EVALUATION_PLAN.md), [Model Test Plan](docs/MODEL_TEST_PLAN.md), [Implementation Options](docs/IMPLEMENTATION_OPTIONS.md), [Architecture](docs/ARCHITECTURE.md), [Decision Log](DECISIONS.md), [Phase 0 Exit Review](docs/PHASE0_EXIT_REVIEW.md), [Increment 4 Exit Review](docs/PHASE1_INCREMENT4_EXIT_REVIEW.md), and [Roadmap](ROADMAP.md).
 
 ## License
 

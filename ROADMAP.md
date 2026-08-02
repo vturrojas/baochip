@@ -14,6 +14,8 @@ Exit criterion: reviewers can identify exactly what Baochip would and would not 
 ## Phase 1 — protocol specification
 
 - Specify device identity, measurement, counter, receipt, and verification formats
+- Define the canonical semantic record projection before selecting canonical bytes
+- Compare encoding candidates using shared positive and adversarial vectors
 - Define provisioning, update, recovery, revocation, and decommissioning flows
 - Publish test vectors and negative cases
 

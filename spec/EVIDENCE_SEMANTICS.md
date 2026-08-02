@@ -2,6 +2,11 @@
 
 Status: Phase 0 semantic contract. Field names and concepts are provisional. Encoding, numeric labels, canonicalization rules, and cryptographic algorithms are intentionally undecided.
 
+The complete receipt projection and its separation from persistent-state and
+authority-metadata objects are defined in
+[Canonical Record Model](CANONICAL_RECORD_MODEL.md). That document remains
+semantic: no canonical byte representation or integrity suite is selected.
+
 ## Evidence boundary
 
 A Baochip receipt is **Evidence** produced by an Attester in the sense of the IETF RATS architecture. It is not an Endorsement, Reference Value, Appraisal Policy, Attestation Result, or relying-party decision.

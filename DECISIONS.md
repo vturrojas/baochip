@@ -107,3 +107,21 @@ Decisions are provisional until their stated evidence and consequences are recor
 - **Status:** Accepted
 - **Decision:** A prepared candidate is never promoted after loss of its previous authority, and a corrupted committed selection is never rolled back to an obsolete record. Ambiguous or impossible recovery fails closed without mutation.
 - **Reason:** Continuing from a convenient record would allow corruption to redefine the commit boundary, defeat revocation or rollback policy, and turn availability pressure into an authority bypass.
+
+## BC-0019 — Canonical semantic projection precedes canonical bytes
+
+- **Status:** Accepted
+- **Decision:** Define the complete typed semantic projection for persistent state, authority metadata, receipts, and future trust inputs before selecting field labels, byte ordering, serialization, or a canonical encoder.
+- **Reason:** Otherwise Rust layout, omitted defaults, library behavior, or the first convenient encoding can silently redefine the security contract.
+
+## BC-0020 — Protected object classes are domain-separated
+
+- **Status:** Accepted at the semantic layer
+- **Decision:** Persistent state, authority metadata, execution receipts, endorsements, and reference values are distinct protected object classes. A future integrity mechanism must bind the object class, profile, schema version, suite, critical extensions, and complete class-specific payload.
+- **Reason:** Equal-looking fields from different contexts must not be substitutable or verifiable under the wrong security meaning.
+
+## BC-0021 — Encoding selection requires comparative evidence
+
+- **Status:** Accepted decision rule; encoding remains open
+- **Decision:** Do not select EAT/CBOR/COSE or a custom deterministic format until at least two candidates encode the same frozen semantic fixtures, publish negative vectors, undergo differential decoding, and report measured constrained costs.
+- **Reason:** Standards alignment, small output, or library availability alone cannot establish canonicality, rejection safety, independent implementability, or suitability.
