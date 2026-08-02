@@ -44,13 +44,17 @@ Status: Phase 0 plan for the first Rust model increment.
 14. A rejection that intentionally enters `FAULT` is committed as a complete durable snapshot.
 15. Semantic authority fixtures bind phase identifiers to the exact previous
     and next record identifiers without wrap.
-16. A semantic receipt release binds a required key-generation context and the
-    matching committed authority subject and snapshot identifier.
+16. A semantic receipt release binds required lineage, the shared protected
+    profile/schema/suite/subject/extension context, an `Operational` selected
+    snapshot, and its matching committed authority identifier.
 17. Every stable semantic validation error has one unique negative fixture with
     an exact expected classification.
 18. Public lifecycle-state, rejection, receipt, counter, commit, and
     persistence-phase surfaces remain conformant with the frozen semantic
     projections exercised by the adapter gate.
+19. Prepared and committed crash recovery plus a fault-producing rejected
+    prepare project to valid authority metadata without exposing a staged
+    receipt or outcome before selector commit.
 
 ## First increment acceptance gate
 

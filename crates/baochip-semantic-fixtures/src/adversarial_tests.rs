@@ -135,6 +135,82 @@ fn receipt_release_binds_committed_authority_and_subject() {
 }
 
 #[test]
+fn receipt_release_binds_complete_shared_protected_context() {
+    let SemanticObject::ExecutionReceipt(receipt) =
+        fixture("receipt-minimal-optionals-absent").object
+    else {
+        panic!("expected receipt fixture");
+    };
+    let SemanticObject::AuthorityMetadata(authority) = fixture("authority-committed").object else {
+        panic!("expected authority fixture");
+    };
+    let SemanticObject::PersistentState(state) =
+        fixture("persistent-operational-receipt-release").object
+    else {
+        panic!("expected persistent-state fixture");
+    };
+
+    let mut mutations = Vec::new();
+    let mut profile = receipt.clone();
+    profile.context.profile_identifier.push_str(".other");
+    mutations.push(profile);
+    let mut schema = receipt.clone();
+    schema.context.schema_version += 1;
+    mutations.push(schema);
+    let mut suite = receipt.clone();
+    suite.context.integrity_suite_identifier.push_str(".other");
+    mutations.push(suite);
+    let mut extensions = receipt;
+    extensions.context.extensions[0].critical = true;
+    mutations.push(extensions);
+
+    for mutation in mutations {
+        assert_eq!(mutation.validate(), Ok(()));
+        assert_eq!(authority.validate(), Ok(()));
+        assert_eq!(state.validate(), Ok(()));
+        assert_eq!(
+            mutation.validate_release_authority(&authority),
+            Err(ValidationError::AuthorityContextMismatch)
+        );
+        assert_eq!(
+            mutation.validate_authoritative_state(&state),
+            Err(ValidationError::StateContextMismatch)
+        );
+        assert_eq!(
+            mutation.validate_release(&authority, &state),
+            Err(ValidationError::AuthorityContextMismatch)
+        );
+    }
+}
+
+#[test]
+fn non_operational_snapshot_cannot_release_a_receipt() {
+    let SemanticObject::ExecutionReceipt(mut receipt) =
+        fixture("receipt-minimal-optionals-absent").object
+    else {
+        panic!("expected receipt fixture");
+    };
+    let SemanticObject::AuthorityMetadata(authority) = fixture("authority-committed").object else {
+        panic!("expected authority fixture");
+    };
+    let SemanticObject::PersistentState(mut state) =
+        fixture("persistent-operational-receipt-release").object
+    else {
+        panic!("expected persistent-state fixture");
+    };
+    receipt.lifecycle_state = LifecycleState::Recovery;
+    state.lifecycle_state = LifecycleState::Recovery;
+
+    assert_eq!(receipt.validate(), Ok(()));
+    assert_eq!(authority.validate(), Ok(()));
+    assert_eq!(state.validate(), Ok(()));
+    assert_eq!(
+        receipt.validate_release(&authority, &state),
+        Err(ValidationError::StateContextMismatch)
+    );
+}
+
+#[test]
 fn persistent_single_field_mutations_fail_closed() {
     let mut update = fixture("persistent-update-pending");
     let SemanticObject::PersistentState(update) = &mut update.object else {

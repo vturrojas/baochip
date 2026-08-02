@@ -20,6 +20,26 @@ const POSITIVE_FIXTURE_IDS: [&str; 17] = [
     "receipt-optionals-present",
 ];
 
+const NEGATIVE_FIXTURE_IDS: [&str; 17] = [
+    "negative-empty-identifier",
+    "negative-empty-subject",
+    "negative-empty-required-value",
+    "negative-wrong-object-class",
+    "negative-invalid-slot",
+    "negative-missing-record",
+    "negative-unexpected-record",
+    "negative-slot-conflict",
+    "negative-selector-mismatch",
+    "negative-duplicate-extension",
+    "negative-unordered-extensions",
+    "negative-commit-id-mismatch",
+    "negative-authority-phase-mismatch",
+    "negative-authority-context-mismatch",
+    "negative-state-context-mismatch",
+    "negative-inconsistent-state",
+    "negative-inconsistent-execution",
+];
+
 const VALIDATION_ERRORS: [ValidationError; 17] = [
     ValidationError::EmptyIdentifier,
     ValidationError::EmptySubject,
@@ -52,9 +72,15 @@ pub struct CorpusConformanceSummary {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CorpusConformanceError {
     PositiveManifestMismatch,
+    NegativeManifestMismatch,
     EmptyFixtureMetadata(&'static str),
     DuplicateFixtureIdentifier(&'static str),
     InvalidPositiveFixture {
+        identifier: &'static str,
+        error: ValidationError,
+    },
+    InvalidNegativeCorpus(NegativeCorpusError),
+    InvalidNegativeOperand {
         identifier: &'static str,
         error: ValidationError,
     },
@@ -89,9 +115,18 @@ pub fn validate_corpus_conformance() -> Result<CorpusConformanceSummary, CorpusC
         }
     }
 
-    let negatives = negative_fixtures();
+    let negatives = negative_fixtures().map_err(CorpusConformanceError::InvalidNegativeCorpus)?;
+    validate_negative_manifest(&negatives)?;
     for (index, fixture) in negatives.iter().enumerate() {
         validate_metadata(fixture.identifier, fixture.purpose)?;
+        if positives
+            .iter()
+            .any(|positive| positive.identifier == fixture.identifier)
+        {
+            return Err(CorpusConformanceError::DuplicateFixtureIdentifier(
+                fixture.identifier,
+            ));
+        }
         if negatives[..index]
             .iter()
             .any(|prior| prior.identifier == fixture.identifier)
@@ -100,6 +135,7 @@ pub fn validate_corpus_conformance() -> Result<CorpusConformanceSummary, CorpusC
                 fixture.identifier,
             ));
         }
+        validate_negative_operands(fixture)?;
         fixture
             .validate_expected()
             .map_err(CorpusConformanceError::InvalidNegativeFixture)?;
@@ -118,6 +154,38 @@ pub fn validate_corpus_conformance() -> Result<CorpusConformanceSummary, CorpusC
         positive_fixtures: positives.len(),
         negative_fixtures: negatives.len(),
         validation_error_classes: VALIDATION_ERRORS.len(),
+    })
+}
+
+fn validate_negative_manifest(negatives: &[NegativeFixture]) -> Result<(), CorpusConformanceError> {
+    let negative_ids: Vec<_> = negatives.iter().map(|fixture| fixture.identifier).collect();
+    if negative_ids != NEGATIVE_FIXTURE_IDS {
+        return Err(CorpusConformanceError::NegativeManifestMismatch);
+    }
+    Ok(())
+}
+
+fn validate_negative_operands(fixture: &NegativeFixture) -> Result<(), CorpusConformanceError> {
+    let result = match &fixture.case {
+        NegativeCase::Object(_) => Ok(()),
+        NegativeCase::ReceiptAuthority { receipt, authority } => {
+            receipt.validate().and_then(|()| authority.validate())
+        }
+        NegativeCase::ReceiptState { receipt, state } => {
+            receipt.validate().and_then(|()| state.validate())
+        }
+        NegativeCase::ReceiptRelease {
+            receipt,
+            authority,
+            state,
+        } => receipt
+            .validate()
+            .and_then(|()| authority.validate())
+            .and_then(|()| state.validate()),
+    };
+    result.map_err(|error| CorpusConformanceError::InvalidNegativeOperand {
+        identifier: fixture.identifier,
+        error,
     })
 }
 
@@ -156,6 +224,38 @@ const fn validation_error_index(error: &ValidationError) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn negative_manifest_rejects_a_renamed_fixture() {
+        let mut negatives = negative_fixtures().expect("frozen negative corpus must construct");
+        negatives[0].identifier = "renamed-negative-fixture";
+
+        assert_eq!(
+            validate_negative_manifest(&negatives),
+            Err(CorpusConformanceError::NegativeManifestMismatch)
+        );
+    }
+
+    #[test]
+    fn conformance_rejects_an_invalid_cross_object_operand() {
+        let mut negative = negative_fixtures()
+            .expect("frozen negative corpus must construct")
+            .into_iter()
+            .find(|fixture| fixture.identifier == "negative-authority-context-mismatch")
+            .expect("fixture must exist");
+        let NegativeCase::ReceiptAuthority { receipt, .. } = &mut negative.case else {
+            panic!("expected receipt/authority case");
+        };
+        receipt.key_identifier.clear();
+
+        assert_eq!(
+            validate_negative_operands(&negative),
+            Err(CorpusConformanceError::InvalidNegativeOperand {
+                identifier: "negative-authority-context-mismatch",
+                error: ValidationError::EmptyRequiredValue,
+            })
+        );
+    }
 
     #[test]
     fn frozen_corpus_is_conformant() {

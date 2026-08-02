@@ -1,7 +1,7 @@
 # Phase 1 Increment 6 Exit Review
 
-Status: Baseline implementation prepared for independent adversarial review;
-merge pending.
+Status: Baseline merged; independent adversarial review corrections and final
+local validation complete; correction merge pending.
 
 ## Scope
 
@@ -16,17 +16,22 @@ merge pending.
 ## Implemented evidence
 
 - Seventeen positive fixture identifiers are pinned and validated.
-- Seventeen negative cases cover all seventeen stable semantic errors exactly
-  once.
+- Seventeen negative identifiers and errors are pinned; their distinct cases
+  cover all seventeen stable semantic errors exactly once.
 - Cross-object authority-phase, authority-context, and state-context cases use
   independently valid operands.
+- The complete three-object release case is exercised, shared protected context
+  substitutions fail closed, and non-Operational snapshots cannot release a
+  receipt.
 - Lifecycle-state and rejection mappings are exhaustive at compile time.
 - Reachable blank, provisioning, and operational receipt-release checkpoints
   are compared against semantic projections.
-- A lifecycle-model receipt satisfies the complete receipt/authority/state
-  semantic release relationship.
-- Persistence-model clean, prepared, committed, and cleaned states project to
-  valid authority metadata.
+- The current lifecycle receipt subset is mapped into a fixture-authored
+  complete receipt/authority/state relationship without claiming the model
+  produces the future-only fields.
+- Persistence-model clean, prepared, committed, cleaned, recovered-previous,
+  recovered-next, and fault-producing rejected states project to valid
+  authority metadata.
 
 ## Supported claims
 
@@ -34,8 +39,9 @@ merge pending.
   inputs with exact semantic rejection expectations.
 - Selected public lifecycle and persistence surfaces are automatically checked
   against fixture projections.
-- Adding a validation error or changing the frozen corpus requires an explicit
-  conformance-gate update.
+- Adding a validation error or changing a frozen fixture identifier requires an
+  explicit conformance-manifest update; semantic case payload changes remain
+  subject to tests, specifications, and review.
 
 ## Unsupported claims
 
@@ -55,9 +61,10 @@ merge pending.
 - [x] Cross-object negative operands are independently valid.
 - [x] Lifecycle and rejection domains are exhaustively mapped.
 - [x] Representative lifecycle and persistence projections conform.
-- [ ] Workspace formatting, checks, Clippy, tests, dependency inspection, and
+- [x] Workspace formatting, checks, Clippy, tests, dependency inspection, and
       `git diff --check` pass in the authoritative WSL toolchain.
-- [ ] Independent adversarial review is complete and its report is linked.
+- [x] Independent adversarial review is complete, with evidence in
+      [the Increment 6 adversarial report](reviews/PHASE1_INCREMENT6_ADVERSARIAL_REVIEW.md).
 - [x] Documentation makes no parser, encoding, cryptographic, durability,
       interoperability, RTL, FPGA, badge, or hardware claim.
 

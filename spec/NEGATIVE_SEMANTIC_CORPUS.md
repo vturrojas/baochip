@@ -15,9 +15,12 @@ Every case contains:
   valid receipt, authority, and persistent-state objects; and
 - one exact expected `ValidationError`.
 
-The initial corpus contains exactly one pinned case for each current stable
-validation error. `validate_corpus_conformance` rejects missing, duplicated,
-unexpected, or differently classified cases.
+The initial corpus contains exactly one pinned identifier and expected error
+for each current stable validation error. `validate_corpus_conformance` rejects
+missing, renamed, reordered, duplicated, unexpected, or differently classified
+entries. It also validates every cross-object operand independently before
+evaluating the relationship. The typed case payloads remain reviewable Rust
+values rather than a second hidden serialization or fingerprint scheme.
 
 ## Covered rejection domains
 
@@ -41,13 +44,18 @@ were neutral semantic truth.
 
 1. Every positive fixture validates successfully.
 2. Every negative fixture fails with its exact pinned semantic error.
-3. Fixture identifiers and cases are unique.
+3. Fixture identifiers are globally unique across positive and negative
+   manifests, and negative case values are pairwise distinct.
 4. Cross-object negative operands validate independently before their
    relationship is evaluated.
 5. Every stable `ValidationError` appears exactly once in the frozen negative
    manifest.
 6. Adding or removing a validation error, positive fixture, or negative case
    requires an explicit conformance-manifest and specification update.
+7. The complete three-object receipt/authority/state release operation is
+   exercised by the frozen negative corpus.
+8. Internal positive-corpus drift encountered while constructing negative
+   operands returns a typed `NegativeCorpusError`; it does not panic.
 
 ## Non-results
 

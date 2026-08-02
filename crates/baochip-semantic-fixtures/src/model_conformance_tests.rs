@@ -1,10 +1,12 @@
 use super::*;
 use baochip_model::{
     Authorizations, Command, Execution as ModelExecution, LifecycleState as ModelLifecycleState,
-    ReceiptClaims as ModelReceiptClaims, Rejection as ModelRejection, StateMachine,
+    ModelTestFault, ReceiptClaims as ModelReceiptClaims, Rejection as ModelRejection, StateMachine,
     UpdateValidation,
 };
-use baochip_persistence_model::{DurableModel, PersistencePhase, PrepareResult};
+use baochip_persistence_model::{
+    CommandOutcome, DurableModel, PersistenceOperation, PersistencePhase, PrepareResult,
+};
 
 fn fixture(identifier: &str) -> Fixture {
     positive_fixtures()
@@ -376,4 +378,117 @@ fn persistence_phases_project_to_valid_authority_metadata() {
         phase: AuthorityPhaseProjection::Clean,
     };
     assert_eq!(clean.validate(), Ok(()));
+}
+
+#[test]
+fn recovered_previous_and_next_project_to_clean_authority_metadata() {
+    let (machine, _) = receipt_release_machine();
+    let command = Command::StageUpdate {
+        authorizations: update_owner(),
+        candidate_version: 5,
+    };
+    let mut durable = DurableModel::new(machine);
+
+    durable.prepare(command).expect("candidate must prepare");
+    let PersistencePhase::Prepared { slot, .. } = durable.phase() else {
+        panic!("expected prepared phase");
+    };
+    let previous_slot = 1 - slot;
+    let recovered_previous = durable
+        .crash_and_recover()
+        .expect("prepared crash must recover previous");
+    assert_eq!(
+        recovered_previous.operation,
+        PersistenceOperation::RecoveredPrevious
+    );
+    assert!(matches!(durable.phase(), PersistencePhase::Clean));
+    let mut record_commit_ids = [None; 2];
+    record_commit_ids[previous_slot] = Some(0);
+    let previous_authority = AuthorityMetadataProjection {
+        context: context(ObjectClass::AuthorityMetadata, 1, None),
+        raw_selected_slot: u8::try_from(previous_slot).expect("two-slot index must fit u8"),
+        record_commit_ids,
+        phase: AuthorityPhaseProjection::Clean,
+    };
+    assert_eq!(previous_authority.validate(), Ok(()));
+    assert_eq!(durable.active_commit_id(), Ok(0));
+    assert_eq!(
+        durable.active_state().map(StateMachine::lifecycle),
+        Ok(ModelLifecycleState::Operational)
+    );
+
+    durable
+        .prepare(command)
+        .expect("candidate must prepare again");
+    let PersistencePhase::Prepared { slot, commit_id } = durable.phase() else {
+        panic!("expected prepared phase");
+    };
+    durable.commit().expect("candidate must commit");
+    let recovered_next = durable
+        .crash_and_recover()
+        .expect("committed crash must recover next");
+    assert_eq!(
+        recovered_next.operation,
+        PersistenceOperation::RecoveredNext
+    );
+    assert!(matches!(durable.phase(), PersistencePhase::Clean));
+    let mut record_commit_ids = [None; 2];
+    record_commit_ids[slot] = Some(commit_id);
+    let next_authority = AuthorityMetadataProjection {
+        context: context(ObjectClass::AuthorityMetadata, 1, None),
+        raw_selected_slot: u8::try_from(slot).expect("two-slot index must fit u8"),
+        record_commit_ids,
+        phase: AuthorityPhaseProjection::Clean,
+    };
+    assert_eq!(next_authority.validate(), Ok(()));
+    assert_eq!(durable.active_commit_id(), Ok(commit_id));
+    assert_eq!(
+        durable.active_state().map(StateMachine::lifecycle),
+        Ok(ModelLifecycleState::UpdatePending)
+    );
+}
+
+#[test]
+fn model_rejected_fault_prepare_projects_to_withheld_authority_outcome() {
+    let mut machine = provisioned_machine();
+    machine.inject_test_fault(ModelTestFault::ReceiptSequenceExhausted);
+    let mut durable = DurableModel::new(machine);
+
+    durable
+        .prepare(Command::IssueReceipt { challenge: None })
+        .expect("fault-producing rejection must stage");
+    let PersistencePhase::Prepared { slot, commit_id } = durable.phase() else {
+        panic!("expected prepared phase");
+    };
+    let previous_slot = 1 - slot;
+    let mut record_commit_ids = [None; 2];
+    record_commit_ids[previous_slot] = Some(0);
+    record_commit_ids[slot] = Some(commit_id);
+    let prepared = AuthorityMetadataProjection {
+        context: context(ObjectClass::AuthorityMetadata, 1, None),
+        raw_selected_slot: u8::try_from(previous_slot).expect("two-slot index must fit u8"),
+        record_commit_ids,
+        phase: AuthorityPhaseProjection::Prepared {
+            candidate_slot: u8::try_from(slot).expect("two-slot index must fit u8"),
+            commit_id,
+            prepared_outcome: PreparedOutcomeProjection::Rejected(map_rejection(
+                ModelRejection::CounterExhausted,
+            )),
+        },
+    };
+    assert_eq!(prepared.validate(), Ok(()));
+    assert_eq!(
+        durable.active_state().map(StateMachine::lifecycle),
+        Ok(ModelLifecycleState::Operational)
+    );
+
+    let committed = durable.commit().expect("fault state must commit");
+    assert_eq!(
+        committed.outcome,
+        CommandOutcome::Rejected(ModelRejection::CounterExhausted)
+    );
+    assert_eq!(
+        durable.active_state().map(StateMachine::lifecycle),
+        Ok(ModelLifecycleState::Fault)
+    );
 }

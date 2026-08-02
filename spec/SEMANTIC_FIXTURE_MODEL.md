@@ -100,17 +100,22 @@ codes without treating Rust construction as a wire-format oracle.
 
 ## Automated conformance and drift checks
 
-`validate_corpus_conformance` pins the ordered positive-fixture manifest,
-validates every positive object, checks unique fixture metadata, validates each
-negative case against its exact error, and requires complete one-to-one
-coverage of the stable validation-error domain.
+`validate_corpus_conformance` pins the ordered positive- and negative-fixture
+identifier manifests, validates every positive object, checks globally unique
+fixture metadata, validates every cross-object operand independently, validates
+each negative case against its exact error, and requires complete one-to-one
+coverage of the stable validation-error domain. Negative-corpus construction is
+fallible and reports typed drift errors rather than panicking.
 
 Test-only adapters exhaustively map lifecycle-state and rejection enums between
-`baochip-model` and this crate. They compare reachable lifecycle checkpoints,
-map a model-issued receipt into the complete semantic release relationship, and
-project `DurableModel` clean/prepared/committed phases into valid authority
-metadata. The model crates are development dependencies only. No mutable state
-loader or runtime coupling is introduced.
+`baochip-model` and this crate. They compare selected reachable Blank, initial
+Provisioning, and Operational receipt-release checkpoints, map a model-issued
+receipt into the complete semantic release relationship, and project
+`DurableModel` clean, prepared, committed, recovered-previous, recovered-next,
+and fault-producing rejected outcomes into valid authority metadata. The
+explicit lifecycle `test-support` feature is enabled only for these development
+tests and remains disabled in ordinary builds. No mutable state loader or
+runtime coupling is introduced.
 
 ## Required candidate behavior
 
@@ -146,6 +151,10 @@ durability evidence, RTL, FPGA result, or hardware claim.
 The authority-release check is a semantic cross-object consistency check. A
 commit identifier is not a digest or cryptographic commitment, and the check
 does not authenticate either object.
+
+Release requires an `Operational` selected snapshot and equality of the shared
+profile, schema, suite, subject, and complete extension context across receipt,
+authority metadata, and persistent state. Their object classes remain distinct.
 
 Receipt lineage is an explicit required choice between key generation and
 provisioning generation. The fixture validator checks the selected mode against

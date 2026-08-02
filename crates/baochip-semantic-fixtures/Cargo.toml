@@ -9,7 +9,7 @@ rust-version.workspace = true
 publish = false
 
 [dev-dependencies]
-baochip-model = { path = "../baochip-model" }
+baochip-model = { path = "../baochip-model", features = ["test-support"] }
 baochip-persistence-model = { path = "../baochip-persistence-model" }
 
 [lints]

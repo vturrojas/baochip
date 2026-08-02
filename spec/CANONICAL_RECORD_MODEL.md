@@ -167,9 +167,13 @@ semantic object class is always bound.
 
 `authority_commit_id` identifies the authoritative persistent snapshot whose
 selector commit released the receipt. A semantic release check also requires
-matching subject scope and `Committed` authority metadata. Every receipt field
-also present in that snapshot must match it exactly; conditional receipt
-sequence is compared when present. The identifier is logical ordering and
+`Committed` authority metadata and matching profile, schema version, integrity
+suite, subject scope, and complete extension set across the receipt, authority
+metadata, and selected persistent state. Object class remains intentionally
+different for each protected object. Every receipt field also present in that
+snapshot must match it exactly; conditional receipt sequence is compared when
+present. The current lifecycle model releases receipts only for an
+`Operational` authoritative snapshot. The identifier is logical ordering and
 cross-object binding metadata, not a hash, signature, or physical-durability
 claim.
 

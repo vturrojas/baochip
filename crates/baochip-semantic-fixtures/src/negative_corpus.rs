@@ -57,6 +57,15 @@ pub struct NegativeFixtureFailure {
     pub actual: Result<(), ValidationError>,
 }
 
+/// Stable failure to construct the frozen negative corpus from its positive
+/// operands. This reports internal corpus drift instead of panicking.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NegativeCorpusError {
+    MissingPositiveFixture(&'static str),
+    UnexpectedPositiveObject(&'static str),
+    UnexpectedAuthorityShape(&'static str),
+}
+
 impl NegativeFixture {
     /// Confirm that this negative fixture fails closed with its exact error.
     pub fn validate_expected(&self) -> Result<(), NegativeFixtureFailure> {
@@ -73,32 +82,32 @@ impl NegativeFixture {
     }
 }
 
-fn fixture(identifier: &str) -> Fixture {
+fn fixture(identifier: &'static str) -> Result<Fixture, NegativeCorpusError> {
     positive_fixtures()
         .into_iter()
         .find(|fixture| fixture.identifier == identifier)
-        .expect("positive fixture must exist")
+        .ok_or(NegativeCorpusError::MissingPositiveFixture(identifier))
 }
 
-fn persistent(identifier: &str) -> PersistentStateProjection {
-    let SemanticObject::PersistentState(state) = fixture(identifier).object else {
-        panic!("expected persistent-state fixture");
+fn persistent(identifier: &'static str) -> Result<PersistentStateProjection, NegativeCorpusError> {
+    let SemanticObject::PersistentState(state) = fixture(identifier)?.object else {
+        return Err(NegativeCorpusError::UnexpectedPositiveObject(identifier));
     };
-    state
+    Ok(state)
 }
 
-fn authority(identifier: &str) -> AuthorityMetadataProjection {
-    let SemanticObject::AuthorityMetadata(authority) = fixture(identifier).object else {
-        panic!("expected authority fixture");
+fn authority(identifier: &'static str) -> Result<AuthorityMetadataProjection, NegativeCorpusError> {
+    let SemanticObject::AuthorityMetadata(authority) = fixture(identifier)?.object else {
+        return Err(NegativeCorpusError::UnexpectedPositiveObject(identifier));
     };
-    authority
+    Ok(authority)
 }
 
-fn receipt(identifier: &str) -> ExecutionReceiptProjection {
-    let SemanticObject::ExecutionReceipt(receipt) = fixture(identifier).object else {
-        panic!("expected receipt fixture");
+fn receipt(identifier: &'static str) -> Result<ExecutionReceiptProjection, NegativeCorpusError> {
+    let SemanticObject::ExecutionReceipt(receipt) = fixture(identifier)?.object else {
+        return Err(NegativeCorpusError::UnexpectedPositiveObject(identifier));
     };
-    receipt
+    Ok(receipt)
 }
 
 /// Candidate-neutral negative corpus.
@@ -106,76 +115,87 @@ fn receipt(identifier: &str) -> ExecutionReceiptProjection {
 /// The initial corpus pins exactly one deterministic case for every stable
 /// semantic [`ValidationError`]. These are invalid typed meanings, not
 /// malformed protocol bytes or parser vectors.
-#[must_use]
-pub fn negative_fixtures() -> Vec<NegativeFixture> {
-    let mut empty_identifier = persistent("persistent-blank-absent-key-generation");
+///
+/// # Errors
+///
+/// Returns [`NegativeCorpusError`] if the positive operands drift from the
+/// object or authority shapes required by the frozen negative corpus.
+pub fn negative_fixtures() -> Result<Vec<NegativeFixture>, NegativeCorpusError> {
+    let mut empty_identifier = persistent("persistent-blank-absent-key-generation")?;
     empty_identifier.context.profile_identifier.clear();
 
-    let mut empty_subject = persistent("persistent-blank-absent-key-generation");
+    let mut empty_subject = persistent("persistent-blank-absent-key-generation")?;
     empty_subject.context.subject.device_identifier.clear();
 
-    let mut empty_required_value = receipt("receipt-minimal-optionals-absent");
+    let mut empty_required_value = receipt("receipt-minimal-optionals-absent")?;
     empty_required_value.key_identifier.clear();
 
-    let mut wrong_object_class = persistent("persistent-blank-absent-key-generation");
+    let mut wrong_object_class = persistent("persistent-blank-absent-key-generation")?;
     wrong_object_class.context.object_class = ObjectClass::ExecutionReceipt;
 
-    let mut invalid_slot = persistent("persistent-blank-absent-key-generation");
+    let mut invalid_slot = persistent("persistent-blank-absent-key-generation")?;
     invalid_slot.slot_id = 2;
 
-    let mut missing_record = authority("authority-prepared-applied");
+    let mut missing_record = authority("authority-prepared-applied")?;
     missing_record.record_commit_ids[1] = None;
 
-    let mut unexpected_record = authority("authority-clean");
+    let mut unexpected_record = authority("authority-clean")?;
     unexpected_record.record_commit_ids[1] = Some(2);
 
-    let mut slot_conflict = authority("authority-prepared-applied");
+    let mut slot_conflict = authority("authority-prepared-applied")?;
     let AuthorityPhaseProjection::Prepared { candidate_slot, .. } = &mut slot_conflict.phase else {
-        panic!("expected prepared authority fixture");
+        return Err(NegativeCorpusError::UnexpectedAuthorityShape(
+            "authority-prepared-applied",
+        ));
     };
     *candidate_slot = slot_conflict.raw_selected_slot;
 
-    let mut selector_mismatch = authority("authority-committed");
+    let mut selector_mismatch = authority("authority-committed")?;
     selector_mismatch.raw_selected_slot = 0;
 
-    let mut duplicate_extension = persistent("persistent-blank-absent-key-generation");
+    let mut duplicate_extension = persistent("persistent-blank-absent-key-generation")?;
     duplicate_extension.context.extensions[1].identifier =
         duplicate_extension.context.extensions[0].identifier.clone();
 
-    let mut unordered_extensions = persistent("persistent-blank-absent-key-generation");
+    let mut unordered_extensions = persistent("persistent-blank-absent-key-generation")?;
     unordered_extensions.context.extensions.reverse();
 
-    let mut commit_id_mismatch = authority("authority-prepared-applied");
+    let mut commit_id_mismatch = authority("authority-prepared-applied")?;
     let AuthorityPhaseProjection::Prepared { commit_id, .. } = &mut commit_id_mismatch.phase else {
-        panic!("expected prepared authority fixture");
+        return Err(NegativeCorpusError::UnexpectedAuthorityShape(
+            "authority-prepared-applied",
+        ));
     };
     *commit_id = 3;
 
-    let receipt_for_phase = receipt("receipt-minimal-optionals-absent");
-    let clean_authority = authority("authority-clean");
+    let receipt_for_phase = receipt("receipt-minimal-optionals-absent")?;
+    let clean_authority = authority("authority-clean")?;
 
-    let receipt_for_authority = receipt("receipt-minimal-optionals-absent");
-    let mut mismatched_authority = authority("authority-committed");
+    let receipt_for_authority = receipt("receipt-minimal-optionals-absent")?;
+    let mut mismatched_authority = authority("authority-committed")?;
     mismatched_authority
         .context
         .subject
         .device_identifier
         .push(0x01);
 
-    let receipt_for_state = receipt("receipt-minimal-optionals-absent");
-    let mut mismatched_state = persistent("persistent-operational-receipt-release");
+    let receipt_for_state = receipt("receipt-minimal-optionals-absent")?;
+    let authority_for_state = authority("authority-committed")?;
+    let mut mismatched_state = persistent("persistent-operational-receipt-release")?;
     mismatched_state.measurement_epoch += 1;
 
-    let mut inconsistent_state = persistent("persistent-blank-absent-key-generation");
+    let mut inconsistent_state = persistent("persistent-blank-absent-key-generation")?;
     inconsistent_state.context.subject.device_generation = 1;
 
-    let mut inconsistent_execution = authority("authority-prepared-applied");
+    let mut inconsistent_execution = authority("authority-prepared-applied")?;
     let AuthorityPhaseProjection::Prepared {
         prepared_outcome: PreparedOutcomeProjection::Applied(execution),
         ..
     } = &mut inconsistent_execution.phase
     else {
-        panic!("expected applied prepared authority fixture");
+        return Err(NegativeCorpusError::UnexpectedAuthorityShape(
+            "authority-prepared-applied",
+        ));
     };
     execution.receipt = Some(CurrentReceiptClaims {
         lifecycle_state: LifecycleState::Operational,
@@ -187,7 +207,7 @@ pub fn negative_fixtures() -> Vec<NegativeFixture> {
         challenge: None,
     });
 
-    vec![
+    Ok(vec![
         NegativeFixture {
             identifier: "negative-empty-identifier",
             purpose: "required protected-context identifier is empty",
@@ -280,9 +300,10 @@ pub fn negative_fixtures() -> Vec<NegativeFixture> {
         },
         NegativeFixture {
             identifier: "negative-state-context-mismatch",
-            purpose: "valid receipt and authoritative state disagree on measurement epoch",
-            case: NegativeCase::ReceiptState {
-                receipt: receipt_for_state,
+            purpose: "complete release disagrees with authoritative measurement epoch",
+            case: NegativeCase::ReceiptRelease {
+                receipt: Box::new(receipt_for_state),
+                authority: authority_for_state,
                 state: mismatched_state,
             },
             expected_error: ValidationError::StateContextMismatch,
@@ -299,7 +320,7 @@ pub fn negative_fixtures() -> Vec<NegativeFixture> {
             case: NegativeCase::Object(SemanticObject::AuthorityMetadata(inconsistent_execution)),
             expected_error: ValidationError::InconsistentExecution,
         },
-    ]
+    ])
 }
 
 #[cfg(test)]
@@ -307,8 +328,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn frozen_corpus_exercises_the_complete_receipt_release_operation() {
+        assert_eq!(
+            negative_fixtures()
+                .expect("frozen negative corpus must construct")
+                .into_iter()
+                .filter(|fixture| matches!(fixture.case, NegativeCase::ReceiptRelease { .. }))
+                .count(),
+            1
+        );
+    }
+
+    #[test]
     fn every_negative_fixture_is_unique_and_fails_with_its_pinned_error() {
-        let fixtures = negative_fixtures();
+        let fixtures = negative_fixtures().expect("frozen negative corpus must construct");
         for (index, fixture) in fixtures.iter().enumerate() {
             assert!(!fixture.identifier.is_empty());
             assert!(!fixture.purpose.is_empty());
@@ -327,7 +360,7 @@ mod tests {
 
     #[test]
     fn cross_object_negative_operands_are_individually_valid() {
-        for fixture in negative_fixtures() {
+        for fixture in negative_fixtures().expect("frozen negative corpus must construct") {
             match fixture.case {
                 NegativeCase::Object(_) => {}
                 NegativeCase::ReceiptAuthority { receipt, authority } => {

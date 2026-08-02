@@ -46,9 +46,12 @@ under `profile` and `schema_version`. This is a semantic requirement, not a
 claim that an envelope or canonical bytes exist.
 
 Receipt release is valid only after the selected snapshot becomes
-authoritative. The receipt subject and `authority_commit_id` must match that
-`Committed` authority context, and every claim shared with the authoritative
-persistent state must agree. A bare commit identifier does not authenticate the
+authoritative. The receipt profile, schema version, integrity suite, subject,
+complete extension set, and `authority_commit_id` must match that `Committed`
+authority context and selected persistent state, while each object retains its
+own domain-separated object class. Every claim shared with the authoritative
+persistent state must agree, and the current lifecycle model permits release
+only from `Operational`. A bare commit identifier does not authenticate the
 record and cannot substitute for the future integrity mechanism.
 
 Digest inputs use explicit domain separation. A measurement event, policy digest, input commitment, and output commitment cannot share an undifferentiated hash domain.

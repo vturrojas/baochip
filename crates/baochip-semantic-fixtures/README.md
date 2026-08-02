@@ -12,7 +12,9 @@ Future candidate encoders must consume equivalent semantic values and publish
 their resulting bytes, rejection vectors, measurements, and reproduction
 instructions separately.
 
-`validate_corpus_conformance` pins the positive manifest and requires exactly
-one negative fixture for every stable semantic validation error. The model
-crates are development dependencies only; candidate encoders do not acquire a
-runtime model dependency.
+`validate_corpus_conformance` pins both identifier manifests, independently
+validates cross-object operands, and requires exactly one negative fixture for
+every stable semantic validation error. Negative-corpus construction reports
+typed drift errors rather than panicking. The model crates are development
+dependencies only; candidate encoders do not acquire a runtime model
+dependency.

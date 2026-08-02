@@ -271,6 +271,14 @@ impl ProtectedContext {
         }
         Ok(())
     }
+
+    fn matches_release_context(&self, other: &Self) -> bool {
+        self.profile_identifier == other.profile_identifier
+            && self.schema_version == other.schema_version
+            && self.integrity_suite_identifier == other.integrity_suite_identifier
+            && self.subject == other.subject
+            && self.extensions == other.extensions
+    }
 }
 
 impl PersistentStateProjection {
@@ -481,7 +489,7 @@ impl ExecutionReceiptProjection {
             return Err(ValidationError::AuthorityPhaseMismatch);
         };
         let selected_commit_id = authority.record_commit_id(selected_next_slot)?;
-        if authority.context.subject != self.context.subject
+        if !self.context.matches_release_context(&authority.context)
             || commit_id != self.authority_commit_id
             || selected_commit_id != self.authority_commit_id
         {
@@ -498,7 +506,9 @@ impl ExecutionReceiptProjection {
     ) -> Result<(), ValidationError> {
         self.validate()?;
         state.validate()?;
-        if state.context.subject != self.context.subject
+        if self.lifecycle_state != LifecycleState::Operational
+            || state.lifecycle_state != LifecycleState::Operational
+            || !self.context.matches_release_context(&state.context)
             || state.commit_id != self.authority_commit_id
             || state.lifecycle_state != self.lifecycle_state
             || state.device_generation != self.device_generation
@@ -937,7 +947,7 @@ pub use conformance::{
     CorpusConformanceError, CorpusConformanceSummary, validate_corpus_conformance,
 };
 pub use negative_corpus::{
-    NegativeCase, NegativeFixture, NegativeFixtureFailure, negative_fixtures,
+    NegativeCase, NegativeCorpusError, NegativeFixture, NegativeFixtureFailure, negative_fixtures,
 };
 
 #[cfg(test)]
