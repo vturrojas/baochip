@@ -283,19 +283,11 @@ fn revoked_identity_cannot_issue_and_recommission_advances_generation() {
 }
 
 #[test]
-fn revocation_is_available_from_blank_and_clears_all_staged_state() {
+fn revocation_clears_all_staged_state() {
     let revocation_auth = Authorizations {
         revocation: true,
         ..Authorizations::none()
     };
-    let mut blank = StateMachine::new();
-    blank
-        .apply(Command::Revoke {
-            authorizations: revocation_auth,
-        })
-        .expect("blank is nonterminal and may be revoked");
-    assert_eq!(blank.lifecycle(), LifecycleState::Revoked);
-
     let mut provisioning = StateMachine::new();
     provisioning
         .apply(Command::BeginProvisioning {

@@ -78,12 +78,17 @@ The following canonical requirements remain only partial or unimplemented:
    which ordinary provisioning required fewer authorities.
    - Fix: provisioning origin is staged explicitly; initial-provisioning abort
      returns to `BLANK`, while recommission abort returns to `REVOKED`.
-3. **A never-provisioned revoked device could enter recommission.** Revoking
-   `BLANK` was permitted by the canonical any-nonterminal rule, but the resulting
-   state could incorrectly invoke a ceremony that assumes destroyed prior
-   identity material.
-   - Fix: recommission requires a prior nonzero device generation and otherwise
-     returns `InvalidTransition` without mutation.
+3. **Blank-state revocation created a revoked state without an identity.** The
+   first review followed the then-written overbroad “any nonterminal” wording
+   and then guarded recommission of the resulting never-provisioned state. An
+   independent second pass corrected the underlying semantics: `BLANK` has no
+   operational identity to revoke.
+   - Fix: `BLANK + Revoke` returns `InvalidState` without mutation, while
+     authorized `BLANK + Decommission` remains available for terminal physical
+     retirement. The obsolete zero-generation recommission guard was removed;
+     the unsupported state can no longer arise through lifecycle commands. The
+     canonical lifecycle and authority documents now exclude `BLANK`, `REVOKED`,
+     and `DECOMMISSIONED` as revocation source states.
 4. **Update activation did not represent required validation evidence, and
    update rejection mixed trusted failure with caller cancellation.**
    - Fix: `AcceptUpdate` now requires typed abstract authentication,
@@ -103,11 +108,14 @@ The following canonical requirements remain only partial or unimplemented:
    provisioning/update staging and an inactive operational identity returned
    errors while leaving the prior lifecycle intact.
    - Fix: these paths now erase staging and identity state and enter `FAULT`.
-7. **Revocation disagreed with the canonical source-state rule and retained
-   staged data.** `BLANK` was excluded despite the any-nonterminal requirement,
-   and provisioning staging survived revocation.
-   - Fix: authorized revocation is accepted from all nonterminal states except
-     an already revoked state, and it erases update/provisioning staging.
+7. **Revocation retained staged data and its source-state rule required a
+   second-pass correction.** Provisioning staging survived revocation. The first
+   review also expanded revocation to `BLANK`, following wording that conflicted
+   with the state's lack of an operational identity.
+   - Fix: authorized revocation erases update/provisioning staging and is
+     accepted only from `PROVISIONING`, `OPERATIONAL`, `UPDATE_PENDING`,
+     `RECOVERY`, and `FAULT`. `BLANK` and already-`REVOKED` reject with
+     `InvalidState`; `DECOMMISSIONED` remains terminal.
 8. **Provisioning interruption had no explicit abort command.**
    - Fix: `AbortProvisioning` now records rollback-relevant state, erases staging,
      and returns to the safe origin state.
@@ -141,7 +149,8 @@ Additional tables and focused tests cover:
 - receipt-sequence uniqueness within a generation and tuple uniqueness across
   recommission;
 - revocation erasure of staged update and recommission state;
-- recommission abort provenance and blank-device recommission denial;
+- recommission abort provenance, blank-state revocation rejection without
+  mutation, and authorized blank-state decommissioning;
 - integrity/invariant failure transition to `FAULT`;
 - revoked receipt denial and terminal decommissioning.
 

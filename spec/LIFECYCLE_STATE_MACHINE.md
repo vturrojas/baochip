@@ -38,11 +38,18 @@ Status: Phase 0 behavioral specification. This document defines security-relevan
 | `UPDATE_PENDING` | reject update | validation fails or authorized cancellation occurs | `OPERATIONAL` | rejection reason and unchanged active version |
 | `OPERATIONAL` | enter recovery | authenticated recovery request or defined fault policy | `RECOVERY` | recovery cause and authority identifier |
 | `RECOVERY` | restore operation | recovery image and resulting identity/policy satisfy recovery rules | `OPERATIONAL` | recovery generation and any identity change |
-| any nonterminal state | revoke | revocation authority and policy validate | `REVOKED` | revocation reason and authority |
+| `PROVISIONING`, `OPERATIONAL`, `UPDATE_PENDING`, `RECOVERY`, or `FAULT` | revoke | a revocable identity or authority lineage exists and revocation authority and policy validate | `REVOKED` | revocation reason and authority |
 | `REVOKED` | recommission | revoked secrets destroyed; generation advances; new unrelated identity; root, prospective owner, and physical/independent authority approve | `PROVISIONING` | recommission record bound to new generation |
 | `REVOKED` | decommission | decommission authorization and secret-erasure procedure complete | `DECOMMISSIONED` | non-secret destruction confirmation |
 | any nonterminal state | decommission | decommission authorization and secret-erasure procedure complete | `DECOMMISSIONED` | non-secret destruction confirmation |
 | any nonterminal state | invariant or persistence failure | fail-closed rule applies | `FAULT` | stable fault class if safely recordable |
+
+Revocation applies only to an identity-bearing source state. `BLANK`,
+`REVOKED`, and `DECOMMISSIONED` are excluded; an authorized unprovisioned
+device may instead move directly from `BLANK` to terminal `DECOMMISSIONED`.
+Supply-chain or hardware blacklisting is expressed through endorsements,
+reference values, or verifier-owner policy rather than device identity
+revocation.
 
 ## Reset and power-loss rules
 

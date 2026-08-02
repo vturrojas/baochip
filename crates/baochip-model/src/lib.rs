@@ -505,11 +505,14 @@ impl StateMachine {
     }
 
     fn revoke(&mut self, auth: Authorizations) -> Result<(), Rejection> {
+        if matches!(
+            self.lifecycle,
+            LifecycleState::Blank | LifecycleState::Revoked
+        ) {
+            return Err(Rejection::InvalidState);
+        }
         if !auth.revocation {
             return Err(Rejection::Unauthorized);
-        }
-        if self.lifecycle == LifecycleState::Revoked {
-            return Err(Rejection::InvalidState);
         }
         self.advance_transition_counter()?;
         self.pending_version = None;
@@ -526,9 +529,6 @@ impl StateMachine {
         }
         if !auth.root || !auth.owner || !(auth.physical_presence || auth.independent) {
             return Err(Rejection::Unauthorized);
-        }
-        if self.device_generation == 0 {
-            return Err(Rejection::InvalidTransition);
         }
         let next_generation = self
             .device_generation

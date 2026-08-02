@@ -68,30 +68,31 @@ fn aborted_recommission_returns_to_revoked() {
 }
 
 #[test]
-fn revoked_blank_device_cannot_enter_recommission() {
+fn blank_rejects_revocation_without_blocking_authorized_decommission() {
     let mut machine = StateMachine::new();
-    machine
-        .apply(Command::Revoke {
+    let before = machine.clone();
+
+    assert_eq!(
+        machine.apply(Command::Revoke {
             authorizations: Authorizations {
                 revocation: true,
                 ..Authorizations::none()
             },
-        })
-        .expect("the canonical any-nonterminal revocation rule includes blank");
-    let before = machine.clone();
-
-    assert_eq!(
-        machine.apply(Command::BeginRecommission {
-            authorizations: Authorizations {
-                root: true,
-                owner: true,
-                physical_presence: true,
-                ..Authorizations::none()
-            },
         }),
-        Err(Rejection::InvalidTransition)
+        Err(Rejection::InvalidState)
     );
     assert_eq!(machine, before);
+
+    machine
+        .apply(Command::Decommission {
+            authorizations: Authorizations {
+                decommission: true,
+                independent: true,
+                ..Authorizations::none()
+            },
+        })
+        .expect("authorized blank device retirement should remain available");
+    assert_eq!(machine.lifecycle(), LifecycleState::Decommissioned);
 }
 
 #[test]
@@ -301,7 +302,6 @@ fn expected_state(state: LifecycleState, kind: CommandKind) -> Option<LifecycleS
         (LifecycleState::Blank, CommandKind::BeginProvisioning) => {
             Some(LifecycleState::Provisioning)
         }
-        (LifecycleState::Blank, CommandKind::Revoke) => Some(LifecycleState::Revoked),
         (LifecycleState::Provisioning, CommandKind::CommitProvisioning) => {
             Some(LifecycleState::Operational)
         }

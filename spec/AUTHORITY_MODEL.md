@@ -32,11 +32,17 @@ One entity may hold multiple roles, but the evidence and policy must show which 
 | `OPERATIONAL` → `UPDATE_PENDING` | `UpdateAuthority` within `OwnerAuthority` version policy |
 | `UPDATE_PENDING` → `OPERATIONAL` | authenticated candidate plus compatibility, integrity, and rollback checks |
 | `OPERATIONAL` → `RECOVERY` | `RecoveryAuthority` plus `PhysicalPresence` or an independent second authority |
-| any nonterminal state → `REVOKED` | `RevocationAuthority`; emergency profiles may allow a signed remote revocation |
+| `PROVISIONING`, `OPERATIONAL`, `UPDATE_PENDING`, `RECOVERY`, or `FAULT` → `REVOKED` | `RevocationAuthority`; emergency profiles may allow a signed remote revocation; `BLANK`, `REVOKED`, and `DECOMMISSIONED` are excluded source states |
 | `REVOKED` → `PROVISIONING` | recommission ceremony defined below; never a reversal of the revoked identity |
 | any nonterminal state → `DECOMMISSIONED` | `DecommissionAuthority` plus `PhysicalPresence` or an independent second authority |
 
 Profiles may strengthen these rules but cannot merge semantically distinct authority claims without declaring the reduced separation.
+
+Because `BLANK` has no operational identity, `RevocationAuthority` does not
+revoke a blank device. Supply-chain and hardware blacklisting are represented
+through endorsements, reference values, or `VerifierOwner` policy. An
+authorized blank physical device may still be retired through the terminal
+decommission transition.
 
 ## Recommissioning after revocation
 
