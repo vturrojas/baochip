@@ -32,7 +32,7 @@ Status: Phase 0 working matrix. “Planned evidence” identifies how a future c
 | `BCT-007` | `BCR-FRE-003`, `BCR-LIF-001`, `002`, `BCR-ASR-001` | protected authority-metadata projection including prepared outcomes and per-slot record commit identifiers, checked-successor fixture tests, independent selector/phase appraisal design, exhaustive interruption points, atomicity model, typed record/selector corruption injection, reset fuzzing |
 | `BCT-008` | `BCR-EVI-005`, `BCR-MEA-003`, `005`, `BCR-VER-002` | verifier-layer tests, documentation review, prohibited-inference cases |
 | `BCT-009` | `BCR-ID-002`, `004` | linkability analysis, pseudonymous-profile comparison, privacy review |
-| `BCT-010` | `BCR-EVI-003`, `004`, `BCR-VER-003`, `004` | semantic fixture validation, canonical type rules, malformed corpus, version downgrade tests, critical-extension tests, differential decoders |
+| `BCT-010` | `BCR-EVI-003`, `004`, `BCR-VER-003`, `004` | positive and negative semantic fixture validation, exact error coverage, model-conformance adapters, canonical type rules, later candidate-specific malformed corpus, version downgrade tests, critical-extension tests, differential decoders |
 | `BCT-011` | `BCR-VER-001` | offline reproduction test and published trust-anchor inputs |
 | `BCT-012` | `BCR-ASR-001`–`004` | claim-to-evidence ledger, reproducibility records, external review |
 

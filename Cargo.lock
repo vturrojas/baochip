@@ -16,3 +16,7 @@ dependencies = [
 [[package]]
 name = "baochip-semantic-fixtures"
 version = "0.1.0"
+dependencies = [
+ "baochip-model",
+ "baochip-persistence-model",
+]

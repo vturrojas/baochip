@@ -930,8 +930,20 @@ pub fn positive_fixtures() -> Vec<Fixture> {
     ]
 }
 
+mod conformance;
+mod negative_corpus;
+
+pub use conformance::{
+    CorpusConformanceError, CorpusConformanceSummary, validate_corpus_conformance,
+};
+pub use negative_corpus::{
+    NegativeCase, NegativeFixture, NegativeFixtureFailure, negative_fixtures,
+};
+
 #[cfg(test)]
 mod adversarial_tests;
+#[cfg(test)]
+mod model_conformance_tests;
 #[cfg(test)]
 mod tests {
     use super::*;

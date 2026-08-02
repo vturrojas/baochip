@@ -1,7 +1,6 @@
 # Phase 1 Increment 5 Exit Review
 
-Status: Independent adversarial review and final local validation complete;
-merge pending.
+Status: Independent adversarial review, final validation, and merge complete.
 
 ## Scope
 
@@ -59,5 +58,5 @@ merge pending.
 - [x] Independent adversarial review is complete, with evidence in
       [the Increment 5 adversarial report](reviews/PHASE1_INCREMENT5_ADVERSARIAL_REVIEW.md).
 
-The tranche exits only after every item is satisfied and the review commit is
-merged.
+The tranche exited when every item was satisfied and the review commit was
+merged as `4dfc83a`.

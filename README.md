@@ -50,12 +50,18 @@ The fixture layer also checks logical receipt release against matching
 committed authority metadata; this is cross-object semantic consistency, not
 authentication or physical durability.
 
+Phase 1 Increment 6 adds the [Negative Semantic Corpus](spec/NEGATIVE_SEMANTIC_CORPUS.md),
+pins every stable semantic validation error, and adds test-only conformance
+checks against the lifecycle and persistence models. It still produces no
+candidate encoding, malformed byte vectors, parser, cryptographic result, or
+hardware claim. See the [Increment 6 Exit Review](docs/PHASE1_INCREMENT6_EXIT_REVIEW.md).
+
 Local validation:
 
 ```text
 cargo fmt --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test --all-targets
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test --workspace --all-targets
 ```
 
 ## Relationship to Surety
@@ -67,6 +73,7 @@ cargo test --all-targets
 Contributions should separate proposals, implementations, experiments, and results. Results must identify the exact artifact, configuration, threat model, and reproduction procedure used.
 
 Start with the [Project Charter](PROJECT_CHARTER.md), then review the [Research Program](docs/RESEARCH_PROGRAM.md), [Prior-Art Matrix](docs/PRIOR_ART_MATRIX.md), [Threat Model](docs/THREAT_MODEL.md), [Threat Traceability](docs/TRACEABILITY_MATRIX.md), [Security Requirements](spec/SECURITY_REQUIREMENTS.md), [Lifecycle State Machine](spec/LIFECYCLE_STATE_MACHINE.md), [Authority Model](spec/AUTHORITY_MODEL.md), [Counter Model](spec/COUNTER_MODEL.md), [Evidence Semantics](spec/EVIDENCE_SEMANTICS.md), [Canonical Record Model](spec/CANONICAL_RECORD_MODEL.md), [Semantic Fixture Model](spec/SEMANTIC_FIXTURE_MODEL.md), [Trust Model](docs/TRUST_MODEL.md), [Executable Model Specification](spec/EXECUTABLE_MODEL.md), [Persistence Model](spec/PERSISTENCE_MODEL.md), [Integrity Recovery Model](spec/INTEGRITY_RECOVERY_MODEL.md), [Encoding Evaluation Plan](docs/ENCODING_EVALUATION_PLAN.md), [Model Test Plan](docs/MODEL_TEST_PLAN.md), [Implementation Options](docs/IMPLEMENTATION_OPTIONS.md), [Architecture](docs/ARCHITECTURE.md), [Decision Log](DECISIONS.md), [Phase 0 Exit Review](docs/PHASE0_EXIT_REVIEW.md), [Increment 4 Exit Review](docs/PHASE1_INCREMENT4_EXIT_REVIEW.md), [Increment 5 Exit Review](docs/PHASE1_INCREMENT5_EXIT_REVIEW.md), and [Roadmap](ROADMAP.md).
+The fixture rejection contract is specified separately in the [Negative Semantic Corpus](spec/NEGATIVE_SEMANTIC_CORPUS.md).
 
 ## License
 

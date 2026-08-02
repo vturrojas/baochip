@@ -131,3 +131,9 @@ Decisions are provisional until their stated evidence and consequences are recor
 - **Status:** Accepted for encoding evaluation
 - **Decision:** Candidate encoders begin from one dependency-free Rust corpus of validated semantic objects and explicit semantic cross-object bindings. Fixture identifiers, Rust enum layout, allocation choices, commit identifiers, and example profile or suite strings are evaluation scaffolding and are not protocol or cryptographic assignments. Each candidate remains responsible for producing and publishing its own bytes and rejection vectors from equivalent semantic values.
 - **Reason:** A shared executable input prevents each encoding prototype from quietly choosing easier semantics while avoiding premature selection of an authoring serialization or canonical byte representation.
+
+## BC-0023 — Negative semantic fixtures precede malformed byte vectors
+
+- **Status:** Accepted for encoding evaluation
+- **Decision:** Freeze one candidate-neutral negative semantic case for every stable fixture-validation error and automatically compare selected public lifecycle and persistence surfaces with fixture projections before any encoding candidate publishes malformed byte vectors.
+- **Reason:** Candidate parsers need a shared rejection contract, but byte-level failures depend on a selected grammar. Separating invalid meanings from malformed representations prevents one candidate's parser behavior from redefining Baochip semantics while making silent model/fixture drift harder.

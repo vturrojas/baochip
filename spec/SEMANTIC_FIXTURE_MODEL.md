@@ -1,6 +1,6 @@
 # Semantic Fixture Model
 
-Status: Phase 1 Increment 5 executable-fixture specification. This document
+Status: Phase 1 Increment 6 executable-fixture specification. This document
 defines the role and acceptance boundary of `baochip-semantic-fixtures`. It
 does not define a protocol encoding, parser, canonical bytes, cryptographic
 suite, or physical representation.
@@ -83,6 +83,35 @@ The crate rejects fixture objects that contain:
 These are semantic fixture errors. They are not byte-parser rejection codes
 and do not demonstrate that any candidate parser fails closed.
 
+## Negative corpus
+
+Increment 6 publishes a typed negative corpus beside the positive objects.
+Each negative fixture has a stable repository identifier, a stated semantic
+distinction, an evaluation operation, and one exact expected `ValidationError`.
+The frozen corpus includes exactly one case for every current validation error
+class. Cross-object cases deliberately use individually valid receipt,
+authority, and state objects so the rejection tests the relationship rather
+than an unrelated malformed operand.
+
+The corpus is candidate-neutral: these cases contain invalid typed meanings,
+not malformed CBOR, custom binary, or other candidate bytes. Candidate parsers
+must later derive their own malformed vectors and stable parser-level rejection
+codes without treating Rust construction as a wire-format oracle.
+
+## Automated conformance and drift checks
+
+`validate_corpus_conformance` pins the ordered positive-fixture manifest,
+validates every positive object, checks unique fixture metadata, validates each
+negative case against its exact error, and requires complete one-to-one
+coverage of the stable validation-error domain.
+
+Test-only adapters exhaustively map lifecycle-state and rejection enums between
+`baochip-model` and this crate. They compare reachable lifecycle checkpoints,
+map a model-issued receipt into the complete semantic release relationship, and
+project `DurableModel` clean/prepared/committed phases into valid authority
+metadata. The model crates are development dependencies only. No mutable state
+loader or runtime coupling is introduced.
+
 ## Required candidate behavior
 
 Each candidate prototype must:
@@ -103,12 +132,12 @@ versioned evaluation artifacts.
 
 ## Drift and limitations
 
-The first corpus is manually traced to the executable model and canonical
-record specification. It is not yet generated from `StateMachine` or
-`DurableModel`, and it does not prove that future model fields cannot drift.
-Any model-field change therefore requires explicit fixture and specification
-review. A later adapter increment may construct fixture projections from
-public model snapshots without exposing mutable state-loading APIs.
+The conformance adapters detect enum-domain changes and drift in the public
+lifecycle, receipt, counter, commit, and persistence-phase surfaces they
+exercise. They do not expose every private model field and do not prove that an
+unchanged public projection captures every future internal field. Model changes
+still require explicit fixture and specification review; the automated gate
+makes silent drift harder, not impossible.
 
 The corpus provides no negative byte vectors, parser, encoder, independent
 decoder, benchmark, cryptographic mechanism, selector/phase trust split,

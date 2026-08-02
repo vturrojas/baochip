@@ -54,6 +54,8 @@ produce:
 
 - an adapter from the versioned `baochip-semantic-fixtures` corpus, with any
   unsupported semantic value reported rather than silently omitted;
+- evidence that every candidate-neutral negative semantic case is preserved as
+  a rejection distinction before candidate-specific malformed bytes are added;
 - preservation of the fixture corpus's semantic cross-object bindings,
   including receipt release against committed authority metadata;
 - canonical encodings for boundary values and every optional-field state;
@@ -101,8 +103,9 @@ An encoding may be selected only when:
 If no candidate passes, Baochip keeps the encoding decision open.
 
 The Rust fixture crate is an input oracle for comparison only. Passing its
-semantic validators does not satisfy parser, canonicalization, differential,
-cryptographic, interoperability, or constrained-cost evidence requirements.
+positive validators, negative semantic corpus, and model-conformance checks
+does not satisfy parser, canonicalization, differential, cryptographic,
+interoperability, or constrained-cost evidence requirements.
 
 ## Explicit non-results
 

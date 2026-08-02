@@ -18,7 +18,7 @@ Exit criterion: reviewers can identify exactly what Baochip would and would not 
 - Publish a candidate-neutral executable semantic fixture corpus
 - Compare encoding candidates using shared positive and adversarial vectors
 - Define provisioning, update, recovery, revocation, and decommissioning flows
-- Publish test vectors and negative cases
+- Publish candidate-neutral positive and negative semantic fixtures, followed by candidate-specific encoded vectors and malformed cases
 
 Exit criterion: an independent implementation can parse and reject malformed evidence.
 

@@ -8,5 +8,9 @@ repository.workspace = true
 rust-version.workspace = true
 publish = false
 
+[dev-dependencies]
+baochip-model = { path = "../baochip-model" }
+baochip-persistence-model = { path = "../baochip-persistence-model" }
+
 [lints]
 workspace = true
